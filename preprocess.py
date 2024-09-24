@@ -72,6 +72,15 @@ for file in files:
                 notes = []
             
             for note in part.notesAndRests:
+
+                #remove melodies that contain notes with odd fractions
+                dur = (note.duration.quarterLength).as_integer_ratio()
+
+                if (not(note.duration.quarterLength % 0.25 == 0) and (not(dur[1] == 3))):
+                    #print(note.duration.quarterLength)
+                    shouldSkip = True
+                    break
+                
                 # record rests as '0'
                 if isinstance(note, music21.note.Rest):
                     # Try splitting the melody if whole rest
