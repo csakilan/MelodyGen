@@ -84,17 +84,21 @@ for file in files:
                 print(f"An error occurred: {str(e)}")
         else:
             print("No notes or chords found in this part of the MIDI file.")
-        key_signatures = part.flat.getElementsByClass('KeySignature')
+
+        
+        key_signatures = set([str(key) for key in part.flat.getElementsByClass('KeySignature')])
 
 
         print("inside main keySignature Area")
         if len(key_signatures) > 1:
                 print("Multiple key signatures found in this part:")
                 #when this code runs, sometimes returns two of the same key signature
+                # use a set for python.
                 #need to remove these parts from everything
                 for ks in key_signatures:
-                    print(f"Key: {ks}, Measure: {ks.measureNumber}")
+                    print(f"Key: {ks}")
         elif len(key_signatures) == 1:
+            key_signatures = list(key_signatures)
             print(f"Single key signature: {key_signatures[0]}")
         else:
             print("No explicit key signature found. Likely inferred.")
