@@ -10,7 +10,8 @@ import music21.instrument
 
 # load files from all given folders
 
-folders_to_load = ["Mono-Melodies-All/Flute"]
+folders_to_load = ["Mono-Melodies-All/Flute","Mono-Melodies-All/Clarinet","Mono-Melodies-All/Choir Aahs", "Mono-Melodies-All/Alto Sax", "Mono-Melodies-All/Acoustic Guitar", "Mono-Melodies-All/Acoustic Grand Piano"]
+
 
 files = []
 
