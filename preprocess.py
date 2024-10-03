@@ -94,6 +94,8 @@ for file in files:
                         print("Multiple key signatures found in this part:")
                         for ks in key_signatures:
                             print(f"Key: {ks}")
+                        shouldSkip = True
+                        break
                 elif len(key_signatures) == 1:
                     key_signatures = list(key_signatures)
                     print(f"Single key signature: {key_signatures[0]}")
@@ -108,14 +110,18 @@ for file in files:
 
                 def cleanUpMelody():
                     global notes
+
+                    
                     
                     # Do not try to add a melody if there are no notes
                     if len(notes) <= 16:
                         return
-                    # cut overlapping notes short
+                    
                     for n in range(len(notes) - 1):
+                        # cut overlapping notes short
                         if((notes[n].offset + notes[n].duration.quarterLength) > notes[n+1].offset):
                             notes[n].duration.quarterLength = notes[n+1].offset - notes[n].offset
+                        
                     melody = []
                     for note in notes:
                         if isinstance(note, music21.note.Rest):
@@ -191,7 +197,10 @@ for melody in melodyData:
     max_pitch = max(integers)
     pitch_range = max_pitch - min_pitch
 
-    print(pitch_range)
+    #remove melodies with a range greater than 36
+    if(pitch_range > 36):
+        melodyData.remove(melody)
+
 
 # i want a list of notes in the following format:
 # [(pitch number, duration in beats), (pitch number)...]
