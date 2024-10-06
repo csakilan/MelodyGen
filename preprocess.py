@@ -6,101 +6,130 @@ import os
 from music21 import *
 from music21.analysis.discrete import DiscreteAnalysisException
 import music21.instrument
-
+from fractions import Fraction
+import time
 
 # load files from all given folders
 
 folders_to_load = ["Mono-Melodies-All/Flute","Mono-Melodies-All/Clarinet","Mono-Melodies-All/Choir Aahs", "Mono-Melodies-All/Alto Sax", "Mono-Melodies-All/Acoustic Guitar", "Mono-Melodies-All/Acoustic Grand Piano"]
-
+# folders_to_load = ["Mono-Melodies-All/Acoustic Grand Piano"]
 
 files = []
 
-file_limit = 5
+file_limit = -1
 file_count = 0
+note_count = 0
 display_output = False
+display_file_output = True
 
 TOLERANCE = .00001
 
-# file reading loop
+startTime = time.time()
 
+# clear line for printing
+if display_file_output:
+    print(" " * 100)
+
+# file reading loop
 for folder in folders_to_load:
     for path in os.listdir(folder):
-        if file_count >= file_limit:
+        if file_limit >= 0 and file_count >= file_limit:
             break
         files.append(folder + "/" + path)
-        if display_output:
-            print("Reading " + path)
         file_count += 1
+        if display_file_output:
+            print(f"\033[FReading {path} ({file_count} files)" + " " * 50)
+
+
+def durationToString(duration: float | Fraction) -> str:
+    if isinstance(duration, Fraction):
+        duration = float(duration.numerator) / duration.denominator
+    return f"{duration:.2f}"
+
+# clear line for printing
+if display_file_output:
+    print(" " * 100)
+
+output_file = open("out/melodyDataRunning.txt", "w")
+output_file.write("[")
 
 # isolate the flute part
 # or any single melody
 melodyData: list[list[(int, float)]] = []
 for file in files:
-    if display_output:
-        print("Looking at", file)
-    stream = music21.instrument.partitionByInstrument(music21.converter.parse(file, format="midi"))
+    if display_file_output:
+        print(f"\033[FLooking at {file} ({len(melodyData)} melodies, {note_count} notes)" + " " * 50)
+    try:
+        stream = music21.instrument.partitionByInstrument(music21.converter.parse(file, format="midi"))
 
-    midiFile = converter.parse(file)
-    # keySignature = midiFile.analyze('key')
-    # print("key signature: ", keySignature)
+        '''
+        midiFile = converter.parse(file)
+        keySignature = midiFile.analyze('key')
+        print("key signature: ", keySignature)
 
-    parts = midiFile.parts
-    # if parts:
-    #     if len(notes_and_chords) > 0:
-    #         try:
-    #             # Try to analyze the key
-    #             key_signature = notes_and_chords.analyze('key')
-    #             print(f"Key Signature: {key_signature}")
-    #         except DiscreteAnalysisException as e:
-    #             # Handle the specific DiscreteAnalysisException
-    #             print(f"Failed to analyze key signature: {str(e)}")
-    #         except Exception as e:
-    #             # Handle any other exceptions
-    #             print(f"An error occurred: {str(e)}")
-    #     else:
-    #         print("No notes or chords found in this part of the MIDI file.")
-    # else:
-    #     print("no parts found")
+        parts = midiFile.parts
+        if parts:
+            if len(notes_and_chords) > 0:
+                try:
+                    # Try to analyze the key
+                    key_signature = notes_and_chords.analyze('key')
+                    print(f"Key Signature: {key_signature}")
+                except DiscreteAnalysisException as e:
+                    # Handle the specific DiscreteAnalysisException
+                    print(f"Failed to analyze key signature: {str(e)}")
+                except Exception as e:
+                    # Handle any other exceptions
+                    print(f"An error occurred: {str(e)}")
+            else:
+                print("No notes or chords found in this part of the MIDI file.")
+        else:
+            print("no parts found")
+        '''
 
-    for part in stream.parts:
-        if part.partName is not None: # and ("Flute" in part.partName or True):            
-            # TODO: confirm the part is in 4/4 
-            # if not, skip the part
-            notes: list[music21.note.Note | music21.note.Rest] = []
-            notes_and_chords = part.flat.getElementsByClass(['Note', 'Chord'])
+        for part in stream.parts:
+            if part.partName is not None:
+                # TODO: confirm the part is in 4/4 
+                # if not, skip the part
+                # apparently time signature is None for all
+                notes: list[music21.note.Note | music21.note.Rest] = []
 
-            if part.partName is not None and ("Flute" in part.partName or True):
                 shouldSkip = False
                 
-                # #Start of Find Key signature of specific part
-                # if len(notes_and_chords) > 0:
-                #     try:
-                #         # Try to analyze the key
-                #         key_signature = notes_and_chords.analyze('key')
-                #         print(f"Key Signature: {key_signature}")
-                #     except DiscreteAnalysisException as e:
-                #         # Handle the specific DiscreteAnalysisException
-                #         print(f"Failed to analyze key signature: {str(e)}")
-                #     except Exception as e:
-                #         # Handle any other exceptions
-                #         print(f"An error occurred: {str(e)}")
-                # else:
-                #     print("No notes or chords found in this part of the MIDI file.")
+                '''
+                notes_and_chords = part.flatten().getElementsByClass(['Note', 'Chord'])
+                #Start of Find Key signature of specific part
+                if len(notes_and_chords) > 0:
+                    try:
+                        # Try to analyze the key
+                        key_signature = notes_and_chords.analyze('key')
+                        print(f"Key Signature: {key_signature}")
+                    except DiscreteAnalysisException as e:
+                        # Handle the specific DiscreteAnalysisException
+                        print(f"Failed to analyze key signature: {str(e)}")
+                    except Exception as e:
+                        # Handle any other exceptions
+                        print(f"An error occurred: {str(e)}")
+                else:
+                    print("No notes or chords found in this part of the MIDI file.")
+                '''
 
                 # Use a set to remove duplicates
-                key_signatures = set([str(key) for key in part.flat.getElementsByClass('KeySignature')])
+                key_signatures = { str(key) for key in part.flatten().getElementsByClass('KeySignature') }
 
                 if len(key_signatures) > 1:
+                    if display_output:
                         print("Multiple key signatures found in this part:")
                         for ks in key_signatures:
                             print(f"Key: {ks}")
-                        shouldSkip = True
-                        break
+                    shouldSkip = True
+                    break
                 elif len(key_signatures) == 1:
                     key_signatures = list(key_signatures)
-                    print(f"Single key signature: {key_signatures[0]}")
+                    if display_output:
+                        print(f"Single key signature: {key_signatures[0]}")
                 else:
-                    print("No explicit key signature found. Likely inferred.")
+                    if display_output:
+                        print("No explicit key signature found. Likely inferred.")
 
 
                 # Fix the melody, then add it to melodyData
@@ -109,9 +138,7 @@ for file in files:
                 # TODO: subtract the highest root node above the lowest note in a melody
 
                 def cleanUpMelody():
-                    global notes
-
-                    
+                    global notes, note_count
                     
                     # Do not try to add a melody if there are no notes
                     if len(notes) <= 16:
@@ -123,22 +150,44 @@ for file in files:
                             notes[n].duration.quarterLength = notes[n+1].offset - notes[n].offset
                         
                     melody = []
+                    hasNote = False
                     for note in notes:
                         if isinstance(note, music21.note.Rest):
-                            melody.append((0, note.duration.quarterLength))
+                            melody.append((0, durationToString(note.duration.quarterLength)))
                         else:
-                            melody.append((note.pitch.midi, note.duration.quarterLength))
+                            melody.append((note.pitch.midi, durationToString(note.duration.quarterLength)))
+                            hasNote = True
+                    
+                    # Do not add melodies that do not contain notes (only contains rests)
+                    if not hasNote:
+                        return
+                    
+                    # remove high octave pitches 
+                    integers = [note[0] for note in melody if note[0] != 0]
+                    min_pitch = min(integers)
+                    max_pitch = max(integers)
+                    pitch_range = max_pitch - min_pitch
+
+                    # remove melodies with a range greater than 36
+                    if(pitch_range > 36):
+                        return
+                    
+                    # normalize the pitches based on min pitch
+                    melody = [(note[0] - min_pitch + 60, note[1]) if note[0] != 0 else note for note in melody]
+                    
+                    if (len(melodyData) > 0):
+                        output_file.write(", ")
+                    note_count += len(melody)
+                    output_file.write(str(melody))
                     melodyData.append(melody)
                     if display_output:
                         print("Added melody of", len(melody), "notes from", part.partName)
                     notes = []
                 
                 for note in part.notesAndRests:
-
-                    #remove melodies that contain notes with odd fractions
+                    # remove melodies that contain notes with odd fractions
                     dur = (note.duration.quarterLength).as_integer_ratio()
-
-                    if (not(note.duration.quarterLength % 0.25 == 0) and (not(dur[1] == 3))):
+                    if (not(4 % dur[1] == 0) and (not(dur[1] == 3))):
                         #print(note.duration.quarterLength)
                         shouldSkip = True
                         break
@@ -159,49 +208,11 @@ for file in files:
                     
                 if not shouldSkip:
                     cleanUpMelody()
-
-    #remove high octave pitches 
+    except Exception as e:
+        if display_file_output:
+            print(f"Error reading {file}: {e}\n")
  
-# print(noteData)
-
-#Code to remove 3+ octaves
-# maxVal = -100
-# minVal = 2000
-# for note in notes:
-#     if len(note) > 0:  # Ensure the tuple has at least one element
-#         if note[0]>maxVal:
-#             maxVal = note[0]
-#         if note[0]<minVal:
-#             minVal = note[0]
-#     else:
-#         print("Tuple is empty or missing the integer part")
-# print(maxVal, minVal)
-    #remove 3+ octave files
-    # print(notes[0])
-    # minPitch = min(notes[0])
-    # maxPitch = max(notes[0])
-    # range = maxPitch-minPitch
-
-    # if range>36:
-    #     print("bigger")
-    # else:
-    #     print("smaller")
-
-
-#remove high octave pitches 
-
-for melody in melodyData:
-    integers = [note[0] for note in melody]
-    integers = [num for num in integers if num != 0]
-    min_pitch = min(integers)
-    max_pitch = max(integers)
-    pitch_range = max_pitch - min_pitch
-
-    #remove melodies with a range greater than 36
-    if(pitch_range > 36):
-        melodyData.remove(melody)
-
-
+"""
 # i want a list of notes in the following format:
 # [(pitch number, duration in beats), (pitch number)...]
 # pitch number is the midi number of the pitch
@@ -210,7 +221,6 @@ for melody in melodyData:
 noteDict = {}
 noteDictLen = 0
 
-"""
 def one_hot_encode(note: tuple[int, float], noteDict: dict): 
     if note not in noteDict:
         noteDict[note] = noteDictLen
@@ -222,5 +232,8 @@ one_hot_encode()"""
 # output the note data to a file
 with open("out/melodyData.txt", "w") as file:
     file.write(str(melodyData))
+output_file.write("]")
+output_file.close()
 
 print("Wrote to file successfully!")
+print(f"Finished running in {time.time() - startTime:.3f} seconds")
