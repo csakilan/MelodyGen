@@ -11,11 +11,11 @@ import time
 
 # load files from all given folders
 read_all_files = False
-folders_to_load = ["Mono-Melodies-All/Flute","Mono-Melodies-All/Clarinet","Mono-Melodies-All/Choir Aahs", "Mono-Melodies-All/Alto Sax", "Mono-Melodies-All/Acoustic Guitar", "Mono-Melodies-All/Acoustic Grand Piano"] if read_all_files else ["Mono-Melodies-All/Alto Sax"]
+folders_to_load = ["Mono-Melodies-All/Flute","Mono-Melodies-All/Clarinet","Mono-Melodies-All/Choir Aahs", "Mono-Melodies-All/Alto Sax", "Mono-Melodies-All/Acoustic Guitar", "Mono-Melodies-All/Acoustic Grand Piano"] if read_all_files else ["Mono-Melodies-All/Acoustic Grand Piano"]
 
 files = []
 
-file_limit = -1 if read_all_files else 5
+file_limit = -1 if read_all_files else 25
 file_count = 0
 note_count = 0
 display_output = False
@@ -38,7 +38,7 @@ for folder in folders_to_load:
         files.append(folder + "/" + path)
         file_count += 1
         if display_file_output:
-            print(f"\033[F\33[2K\rReading {path} ({file_count} files)")
+            print(f"\033[F\33[2K\rFound {path} ({file_count} files)")
 
 
 def durationToString(duration: float | Fraction) -> str:
@@ -166,7 +166,8 @@ for file_index in range(file_count):
                             hasNote = True
                     
                     # Do not add melodies that do not contain notes (only contains rests)
-                    if not hasNote:
+                    # Also check if melody is too short after overlapping notes cut short to 0 were removed
+                    if not hasNote or len(melody) <= 16:
                         return
                     
                     # remove high octave pitches 
