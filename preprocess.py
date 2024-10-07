@@ -10,19 +10,19 @@ from fractions import Fraction
 import time
 
 # load files from all given folders
-
-folders_to_load = ["Mono-Melodies-All/Flute","Mono-Melodies-All/Clarinet","Mono-Melodies-All/Choir Aahs", "Mono-Melodies-All/Alto Sax", "Mono-Melodies-All/Acoustic Guitar", "Mono-Melodies-All/Acoustic Grand Piano"]
-# folders_to_load = ["Mono-Melodies-All/Acoustic Grand Piano"]
+read_all_files = False
+folders_to_load = ["Mono-Melodies-All/Flute","Mono-Melodies-All/Clarinet","Mono-Melodies-All/Choir Aahs", "Mono-Melodies-All/Alto Sax", "Mono-Melodies-All/Acoustic Guitar", "Mono-Melodies-All/Acoustic Grand Piano"] if read_all_files else ["Mono-Melodies-All/Alto Sax"]
 
 files = []
 
-file_limit = -1
+file_limit = -1 if read_all_files else 5
 file_count = 0
 note_count = 0
 display_output = False
 display_file_output = True
 
 TOLERANCE = .00001
+PROGRESS_CHARACTERS = 30
 
 startTime = time.time()
 
@@ -38,7 +38,7 @@ for folder in folders_to_load:
         files.append(folder + "/" + path)
         file_count += 1
         if display_file_output:
-            print(f"\033[FReading {path} ({file_count} files)" + " " * 50)
+            print(f"\033[F\33[2K\rReading {path} ({file_count} files)")
 
 
 def durationToString(duration: float | Fraction) -> str:
@@ -56,9 +56,13 @@ output_file.write("[")
 # isolate the flute part
 # or any single melody
 melodyData: list[list[(int, float)]] = []
-for file in files:
+for file_index in range(file_count):
+    file = files[file_index]
     if display_file_output:
-        print(f"\033[FLooking at {file} ({len(melodyData)} melodies, {note_count} notes)" + " " * 50)
+        progress = (file_index + 1) / file_count * 100
+        progress_int = int(round(progress / (100 / PROGRESS_CHARACTERS)))
+        last_slash = file.rfind("/")
+        print(f"\033[F\33[2K\r[{"#" * progress_int}{"-" * (PROGRESS_CHARACTERS - progress_int)}] {progress:.1f}% - {file[:last_slash] + "/" + file[last_slash + 1:last_slash+7] + "..."} ({len(melodyData)} melodies, {note_count} notes)")
     try:
         stream = music21.instrument.partitionByInstrument(music21.converter.parse(file, format="midi"))
 
@@ -152,10 +156,13 @@ for file in files:
                     melody = []
                     hasNote = False
                     for note in notes:
+                        durationStr = durationToString(note.duration.quarterLength)
+                        if durationStr == "0.00":
+                            continue
                         if isinstance(note, music21.note.Rest):
-                            melody.append((0, durationToString(note.duration.quarterLength)))
+                            melody.append((0, durationStr))
                         else:
-                            melody.append((note.pitch.midi, durationToString(note.duration.quarterLength)))
+                            melody.append((note.pitch.midi, durationStr))
                             hasNote = True
                     
                     # Do not add melodies that do not contain notes (only contains rests)
@@ -172,8 +179,24 @@ for file in files:
                     if(pitch_range > 36):
                         return
                     
-                    # normalize the pitches based on min pitch
-                    melody = [(note[0] - min_pitch + 60, note[1]) if note[0] != 0 else note for note in melody]
+                    # normalize the pitches based on min root pitch
+                    counts = [0] * 12
+                    for pitch in integers:
+                        counts[pitch % 12] += 1
+                    # get root note [0, 12) based on most common 1st and 5th notes
+                    root = 0
+                    maxCount = 0
+                    for i in range(12):
+                        myCount = counts[i] * 2 + counts[(i + 5) % 12] + counts[(i + 7) % 12]
+                        if myCount > maxCount:
+                            root = i
+                            maxCount = myCount
+                    # offset is largest root that is <= min_pitch
+                    offset = min_pitch % 12 - root
+                    offset = offset if offset <= 0 else offset - 12
+                    if display_output:
+                        print(counts, root)
+                    melody = [(note[0] - (min_pitch + offset) + 60, note[1]) if note[0] != 0 else note for note in melody]
                     
                     if (len(melodyData) > 0):
                         output_file.write(", ")
