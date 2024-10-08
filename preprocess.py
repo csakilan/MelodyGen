@@ -11,6 +11,7 @@ import time
 
 # load files from all given folders
 read_all_files = False
+include_triplets = True
 folders_to_load = ["Mono-Melodies-All/Flute","Mono-Melodies-All/Clarinet","Mono-Melodies-All/Choir Aahs", "Mono-Melodies-All/Alto Sax", "Mono-Melodies-All/Acoustic Guitar", "Mono-Melodies-All/Acoustic Grand Piano"] if read_all_files else ["Mono-Melodies-All/Flute"]
 
 files = []
@@ -125,6 +126,9 @@ for file_index in range(file_count):
                         # cut overlapping notes short
                         if((notes[n].offset + notes[n].duration.quarterLength) > notes[n+1].offset):
                             notes[n].duration.quarterLength = notes[n+1].offset - notes[n].offset
+                            ratio = notes[n].duration.quarterLength.as_integer_ratio()
+                            if not(4 % ratio[1] == 0 or (ratio[1] == 3 and include_triplets)):
+                                return
                         
                     melody = []
                     hasNote = False
@@ -179,7 +183,7 @@ for file_index in range(file_count):
                 for note in part.notesAndRests:
                     # remove melodies that contain notes with odd fractions
                     dur = (note.duration.quarterLength).as_integer_ratio()
-                    if (not(4 % dur[1] == 0) and (not(dur[1] == 3))):
+                    if not(4 % dur[1] == 0 or (dur[1] == 3 and include_triplets)):
                         #print(note.duration.quarterLength)
                         shouldSkip = True
                         break
