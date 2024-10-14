@@ -209,7 +209,7 @@ for file_index in range(file_count):
             print(f"Error reading {file}: {e}\n")
 
 # output the note data to a file
-with open("out/melodyData.txt", "w") as file:
+with open("melodyData.txt", "w") as file:
     file.write(str(melodyData))
 
 print("Wrote to file successfully!")
