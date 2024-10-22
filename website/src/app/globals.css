@@ -5,14 +5,18 @@
 :root {
   --background: #ffffff;
   --foreground: #000;
-  --grid-border: #c8c8c8;
+  --grid-border: #b8b8b8;
+  --grid-border-quarter: #aaa;
+  --grid-border-whole: #666
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #333;
     --foreground: #fff;
-    --grid-border: #585858;
+    --grid-border: #686868;
+    --grid-border-quarter: #888;
+    --grid-border-whole: #ccc
   }
 }
 
@@ -22,10 +26,16 @@ body {
   font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif
 }
 
-.draggable-note {
-  cursor: move;
+.grid-border-whole {
+  stroke: var(--grid-border-whole);
+  stroke-width: 1.5;
+}
+
+.grid-border-quarter {
+  stroke: var(--grid-border-quarter);
 }
 
 .grid-border {
   stroke: var(--grid-border);
+  stroke-width: .5;
 }
