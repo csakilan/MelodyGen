@@ -1,0 +1,1 @@
+['B- major', 'C major', 'C major', 'g minor', 'G major', 'b- minor', 'e minor', 'd minor', 'e- minor', 'A major']
