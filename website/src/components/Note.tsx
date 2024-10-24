@@ -1,7 +1,7 @@
 import { GRID_SIZE_X, GRID_SIZE_Y } from "@/util/config";
 import { useRef, useState } from "react";
 import Draggable, { DraggableEvent } from "react-draggable";
-import { EDITOR_HEIGHT, EDITOR_WIDTH } from "./Editor";
+import { EDITOR_HEIGHT, EDITOR_WIDTH, noteIdToPosition, notePositionToId } from "./Editor";
 
 interface NoteProps {
     position: number[];
@@ -17,7 +17,7 @@ export default function Note({ position, duration, gridMultiplier, lastNote, upd
     const noteStartRef = useRef([0, 0]);
     const dragStartRef = useRef([0, 0]);
     const noteDurationStartRef = useRef(0);
-    const [notePosition, setNotePosition] = useState(position);
+    const [notePosition, setNotePosition] = useState(noteIdToPosition(position));
     const [noteDuration, setNoteDuration] = useState(duration);
     const [resizing, setResizing] = useState(false);
 
@@ -39,7 +39,7 @@ export default function Note({ position, duration, gridMultiplier, lastNote, upd
         setNotePosition(newPos);
     };
     const onStop = () => {
-        updateNote(notePosition, noteDuration);
+        updateNote(notePositionToId(notePosition), noteDuration);
     };
     const onEndStart = (e: DraggableEvent) => {
         e = e as MouseEvent;
@@ -58,7 +58,7 @@ export default function Note({ position, duration, gridMultiplier, lastNote, upd
         setNoteDuration(newDuration);
     };
     const onEndStop = () => {
-        updateNote(notePosition, noteDuration);
+        updateNote(notePositionToId(notePosition), noteDuration);
         setResizing(false);
     }
 

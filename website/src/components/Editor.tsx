@@ -3,19 +3,29 @@
 import { useRef, useState } from "react";
 import Draggable from "react-draggable";
 import Note from "./Note";
-import { BORDER_WIDTH, GRID_ROWS, GRID_SIZE_X, GRID_SIZE_Y, MAX_GRID_X, PIANO_KEY_GAP, PIANO_KEY_WIDTH, QUARTER_GRID_X } from "@/util/config";
+import { BORDER_WIDTH, GRID_ROWS, GRID_SIZE_X, GRID_SIZE_Y, LOWEST_OCTAVE, MAX_GRID_X, PIANO_KEY_GAP, PIANO_KEY_WIDTH, QUARTER_GRID_X } from "@/util/config";
 import Button from "./Button";
 
-export const EDITOR_WIDTH = GRID_SIZE_X * 4 * 4 * 8, EDITOR_HEIGHT = GRID_SIZE_Y * GRID_ROWS;
+export const EDITOR_COLS = 4 * 4 * 8;
+export const EDITOR_WIDTH = EDITOR_COLS * GRID_SIZE_X, EDITOR_HEIGHT = GRID_SIZE_Y * GRID_ROWS;
 
 const B = "#000", W = "#fff";
 const noteColors = [W, B, W, B, W, W, B, W, B, W, B, W];
+const noteNames = ["C", "C#", "D", "E♭", "E", "F", "F#", "G", "G#", "A", "B♭", "B"];
 const getNoteColor = (key: number, note: number) => {
   return noteColors[(key + note - 1 + noteColors.length) % noteColors.length];
 };
 
-function getNoteIndex(y: number) {
+const getNoteIndex = (y: number) => {
   return GRID_ROWS - y / GRID_SIZE_Y;
+}
+
+export const noteIdToPosition = (note: number[]) => {
+  return [note[0] * GRID_SIZE_X, EDITOR_HEIGHT - note[1] * GRID_SIZE_Y];
+};
+
+export const notePositionToId = (pos: number[]) => {
+  return [pos[0] / GRID_SIZE_X, GRID_ROWS - pos[1] / GRID_SIZE_Y];
 }
 
 export default function Editor() {
@@ -25,6 +35,7 @@ export default function Editor() {
   // Positions of the notes [[x, y, duration], ...]
   const notes = useRef<number[][]>([]);
   const [gridMultiplier, setGridMultiplier] = useState(2);
+  const [key, setKey] = useState(0);
 
   const forceUpdate = () => _upd(x => x + 1);
 
@@ -42,12 +53,21 @@ export default function Editor() {
   }
 
   const onAddNote = () => {
-    const x = notes.current.reduce((max, pos) => Math.max(max, pos[0] + pos[2] * GRID_SIZE_X), 0);
-    if (x >= EDITOR_WIDTH) {
+    const x = notes.current.reduce((max, pos) => Math.max(max, pos[0] + pos[2]), 0);
+    if (x >= EDITOR_COLS) {
       console.log("Cannot add note, out of space");
       return;
     }
-    notes.current.push([x, 0, 4]);
+    notes.current.push([x, 1, Math.min(4, EDITOR_COLS - x)]);
+    forceUpdate();
+  };
+
+  const onRemoveNote = () => {
+    if (notes.current.length == 0) {
+      console.log("No notes to remove");
+      return;
+    }
+    notes.current.pop();
     forceUpdate();
   };
 
@@ -60,9 +80,12 @@ export default function Editor() {
             <g className="grid-border">
             {
               Array(GRID_ROWS).fill(0).map((_, i) => {
-                const y = i * GRID_SIZE_Y;
+                const y = noteIdToPosition([0, i + 1])[1];
                 return (
-                    <rect key={i} x={0} y={y} width={PIANO_KEY_WIDTH} height={GRID_SIZE_Y} fill={getNoteColor(0, getNoteIndex(GRID_SIZE_Y * i))} />
+                  <g key={y}>
+                    <rect x={0} y={y} width={PIANO_KEY_WIDTH} height={GRID_SIZE_Y} fill={getNoteColor(key, i + 1)} />
+                    { (i + key) % 12 === 0 && <text x={PIANO_KEY_WIDTH - 4} y={y + GRID_SIZE_Y / 2} dominantBaseline="middle" textAnchor="end" fontSize={GRID_SIZE_Y - 2}>C{Math.floor((i + key) / 12) + LOWEST_OCTAVE}</text> }
+                  </g>
                 );
               })
             }
@@ -126,7 +149,14 @@ export default function Editor() {
             <option value={8}>Half</option>
             <option value={16}>Whole</option>
           </select>
+          <select value={key} onChange={(e) => setKey(parseInt(e.target.value))}>
+            {
+              Array(12).fill(0).map((_, i) => 11 - i).map(i => <option key={i} value={i}>{noteNames[i]}</option>)
+            }
+          </select>
           <Button onClick={onAddNote}>Add Note</Button>
+          <Button onClick={onRemoveNote}>Remove Last Note</Button>
+          <Button onClick={() => console.log(notes.current)}>Log Notes</Button>
         </div>
       </div>
     </div>
