@@ -182,7 +182,9 @@ for file_index in range(file_count):
             while len(melodyData) <= file_index:
                 melodyData.append([])
 
-            melodyData[file_index].insert(0, str(key_signature.name) + str(time_signature.ratioString))
+            
+            key_sig = key_signature.name[(len(key_signature.name)) - 5:]
+            melodyData[file_index].insert(0, key_sig + str(time_signature.ratioString))
 
 
 
