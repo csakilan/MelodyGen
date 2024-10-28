@@ -4,10 +4,13 @@
 import os 
 # import music21
 from music21 import *
-from music21.analysis.discrete import DiscreteAnalysisException
 import music21.instrument
 from fractions import Fraction
 import time
+import traceback
+import warnings
+
+import music21.midi.translate
 
 # load files from all given folders
 read_all_files = False
@@ -22,14 +25,12 @@ note_count = 0
 display_output = False
 display_file_output = True
 
+valid_times = ["3/4", "4/4"]
+
 TOLERANCE = .00001
 PROGRESS_CHARACTERS = 30
 
 startTime = time.time()
-
-# clear line for printing
-if display_file_output:
-    print(" " * 100)
 
 # file reading loop
 for folder in folders_to_load:
@@ -39,7 +40,8 @@ for folder in folders_to_load:
         files.append(folder + "/" + path)
         file_count += 1
         if display_file_output:
-            print(f"\033[F\33[2K\rFound {path} ({file_count} files)")
+            print(f"\33[2KFound {path} ({file_count} files)", end="\r")
+print()
 
 
 def durationToString(duration: float | Fraction) -> str:
@@ -47,9 +49,10 @@ def durationToString(duration: float | Fraction) -> str:
         duration = float(duration.numerator) / duration.denominator
     return f"{duration:.2f}"
 
-# clear line for printing
-if display_file_output:
-    print(" " * 100)
+keys = []
+
+# Hide "Unable to get instrument..." warning
+warnings.filterwarnings("ignore", category=music21.midi.translate.TranslateWarning)
 
 # isolate the flute part
 # or any single melody
@@ -60,60 +63,33 @@ for file_index in range(file_count):
         progress = (file_index + 1) / file_count * 100
         progress_int = int(round(progress / (100 / PROGRESS_CHARACTERS)))
         last_slash = file.rfind("/")
-        print(f"\033[F\33[2K\r[{"#" * progress_int}{"-" * (PROGRESS_CHARACTERS - progress_int)}] {progress:.1f}% - {file[:last_slash] + "/" + file[last_slash + 1:last_slash+7] + "..."} ({len(melodyData)} melodies, {note_count} notes)")
+        #print(f"\33[2K[{"#" * progress_int}{"-" * (PROGRESS_CHARACTERS - progress_int)}] {progress:.1f}% - {file[:last_slash] + "/" + file[last_slash + 1:last_slash+7] + "..."} ({len(melodyData)} melodies, {note_count} notes)", end="\r")
     try:
         stream = music21.instrument.partitionByInstrument(music21.converter.parse(file, format="midi"))
+        key_signature: key.Key = stream.analyze("key")
+        keys.append(str(key_signature))
+
+        timeSigFound = False
+        timeSig = ""
+
 
         for part in stream.parts:
             if part.partName is not None:
-                # TODO: confirm the part is in 4/4 
-                # if not, skip the part
-                # apparently time signature is None for all
                 notes: list[music21.note.Note | music21.note.Rest] = []
-
                 shouldSkip = False
-                
-                '''
-                notes_and_chords = part.flatten().getElementsByClass(['Note', 'Chord'])
-                #Start of Find Key signature of specific part
-                if len(notes_and_chords) > 0:
-                    try:
-                        # Try to analyze the key
-                        key_signature = notes_and_chords.analyze('key')
-                        print(f"Key Signature: {key_signature}")
-                    except DiscreteAnalysisException as e:
-                        # Handle the specific DiscreteAnalysisException
-                        print(f"Failed to analyze key signature: {str(e)}")
-                    except Exception as e:
-                        # Handle any other exceptions
-                        print(f"An error occurred: {str(e)}")
-                else:
-                    print("No notes or chords found in this part of the MIDI file.")
-                '''
 
-                # Use a set to remove duplicates
-                key_signatures = { str(key) for key in part.flatten().getElementsByClass('KeySignature') }
+                # TIME SIGNATURE CHECK
+                time_signature_it: music21.stream.iterator.RecursiveIterator = part[music21.meter.TimeSignature]
+                if len(time_signature_it) == 0:
+                    continue
+                time_signature = time_signature_it[0]
+                if not time_signature.ratioString in valid_times:
+                    #print(f"Skipping {file} due to invalid time signature {time_signature.ratioString}")
+                    continue
 
-                if len(key_signatures) > 1:
-                    if display_output:
-                        print("Multiple key signatures found in this part:")
-                        for ks in key_signatures:
-                            print(f"Key: {ks}")
-                    shouldSkip = True
-                    break
-                elif len(key_signatures) == 1:
-                    key_signatures = list(key_signatures)
-                    if display_output:
-                        print(f"Single key signature: {key_signatures[0]}")
-                else:
-                    if display_output:
-                        print("No explicit key signature found. Likely inferred.")
-
-
-                # Fix the melody, then add it to melodyData
-                
-                # TODO: find a way to find the key signature of a given part
-                # TODO: subtract the highest root node above the lowest note in a melody
+                timeSig = str(time_signature.ratioString)
+                timeSigFound = True
+                #print(time_signature.ratioString + str(key_signature))
 
                 def cleanUpMelody():
                     global notes, note_count
@@ -137,7 +113,14 @@ for file_index in range(file_count):
                         if durationStr == "0.00":
                             continue
                         if isinstance(note, music21.note.Rest):
-                            melody.append((0, durationStr))
+                            # Condense rests to be shorter than a measure
+                            if len(melody) > 0 and melody[-1][0] == 0:
+                                dur = (Fraction(durationStr) + Fraction(melody[-1][1])) % time_signature.numerator
+                                if dur == 0:
+                                    dur = time_signature.numerator
+                                melody[-1] = (0, durationToString(dur))
+                            else:
+                                melody.append((0, durationStr))
                         else:
                             melody.append((note.pitch.midi, durationStr))
                             hasNote = True
@@ -157,23 +140,12 @@ for file_index in range(file_count):
                     if(pitch_range > 36):
                         return
                     
-                    # normalize the pitches based on min root pitch
-                    counts = [0] * 12
-                    for pitch in integers:
-                        counts[pitch % 12] += 1
-                    # get root note [0, 12) based on most common 1st and 5th notes
-                    root = 0
-                    maxCount = 0
-                    for i in range(12):
-                        myCount = counts[i] * 2 + counts[(i + 5) % 12] + counts[(i + 7) % 12]
-                        if myCount > maxCount:
-                            root = i
-                            maxCount = myCount
+                    root = key_signature.tonic.midi % 12
                     # offset is largest root that is <= min_pitch
                     offset = min_pitch % 12 - root
                     offset = offset if offset <= 0 else offset - 12
                     melody = [(note[0] - (min_pitch + offset) + 1, note[1]) if note[0] != 0 else note for note in melody]
-                    
+
                     note_count += len(melody)
                     melodyData.append(melody)
                     if display_output:
@@ -204,13 +176,39 @@ for file_index in range(file_count):
                     
                 if not shouldSkip:
                     cleanUpMelody()
+
+        if timeSigFound == True:
+            # Ensure melodyData has enough elements
+            while len(melodyData) <= file_index:
+                melodyData.append([])
+
+            
+            key_sig = key_signature.name[(len(key_signature.name)) - 5:]
+            melodyData[file_index].insert(0, key_sig + str(time_signature.ratioString))
+
+
+
+            
+        #time_signature: meter.TimeSignature = stream.flat.getElementsByClass(meter.TimeSignature)[0]
+        
+
+
+    except midi.MidiException as e:
+        print(f"Error reading {file}: {e}\n")
     except Exception as e:
         if display_file_output:
-            print(f"Error reading {file}: {e}\n")
+            traceback.print_exc()
+print()
+
+melody = []
 
 # output the note data to a file
-with open("melodyData.txt", "w") as file:
+with open("out/melodyData.txt", "w") as file:
     file.write(str(melodyData))
+
+
+with open("out/keys.txt", "w") as file:
+    file.write(str(keys))
 
 print("Wrote to file successfully!")
 print(f"Finished running in {time.time() - startTime:.3f} seconds")
