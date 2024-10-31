@@ -7,7 +7,9 @@
   --foreground: #000;
   --grid-border: #b8b8b8;
   --grid-border-quarter: #aaa;
-  --grid-border-whole: #666
+  --grid-border-whole: #666;
+  --root-note: #d8d8d8;
+  --hovered-note: #c8c8c8;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -16,7 +18,9 @@
     --foreground: #fff;
     --grid-border: #686868;
     --grid-border-quarter: #888;
-    --grid-border-whole: #ccc
+    --grid-border-whole: #ccc;
+    --root-note: #484848;
+    --hovered-note: #585858;
   }
 }
 
@@ -41,4 +45,12 @@ body {
 .grid-border {
   stroke: var(--grid-border);
   stroke-width: .5;
+}
+
+.root-note {
+  fill: var(--root-note);
+}
+
+.hovered-note {
+  fill: var(--hovered-note);
 }

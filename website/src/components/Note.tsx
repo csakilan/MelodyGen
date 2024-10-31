@@ -1,14 +1,15 @@
 import { GRID_SIZE_X, GRID_SIZE_Y } from "@/util/config";
 import { useRef, useState } from "react";
 import Draggable, { DraggableEvent } from "react-draggable";
-import { EDITOR_HEIGHT, EDITOR_WIDTH, noteIdToPosition, notePositionToId } from "./Editor";
+import { EDITOR_HEIGHT, EDITOR_WIDTH, noteIdToPosition, NoteInfo, notePositionToId } from "./Editor";
+import { twMerge } from "tailwind-merge";
 
 interface NoteProps {
     position: number[];
     duration: number;
     gridMultiplier: number;
     lastNote: boolean;
-    updateNote: (pos: number[], duration: number) => void;
+    updateNote: (note: NoteInfo) => void;
 }
 
 export default function Note({ position, duration, gridMultiplier, lastNote, updateNote }: NoteProps) {
@@ -20,6 +21,8 @@ export default function Note({ position, duration, gridMultiplier, lastNote, upd
     const [notePosition, setNotePosition] = useState(noteIdToPosition(position));
     const [noteDuration, setNoteDuration] = useState(duration);
     const [resizing, setResizing] = useState(false);
+    if (duration !== noteDuration && !resizing)
+        setNoteDuration(duration);
 
     const durationGridded = noteDuration / gridMultiplier;
     const GRID_X = GRID_SIZE_X * gridMultiplier;
@@ -39,16 +42,18 @@ export default function Note({ position, duration, gridMultiplier, lastNote, upd
         setNotePosition(newPos);
     };
     const onStop = () => {
-        updateNote(notePositionToId(notePosition), noteDuration);
+        updateNote({ position: notePositionToId(notePosition), duration: noteDuration });
     };
     const onEndStart = (e: DraggableEvent) => {
         e = e as MouseEvent;
+        noteStartRef.current = notePosition;
         noteDurationStartRef.current = noteDuration;
         dragStartRef.current = [e.screenX, e.screenY];
         setResizing(true);
     };
     const onEndDrag = (e: DraggableEvent) => {
         e = e as MouseEvent;
+        onDrag(e);
         // Calculate new duration based on mouse offset from drag starting position
         let newDuration = (e.screenX - dragStartRef.current[0]) / GRID_SIZE_X + noteDurationStartRef.current;
         // Bound the max duration to the right edge of the editor
@@ -58,14 +63,14 @@ export default function Note({ position, duration, gridMultiplier, lastNote, upd
         setNoteDuration(newDuration);
     };
     const onEndStop = () => {
-        updateNote(notePositionToId(notePosition), noteDuration);
+        updateNote({ position: notePositionToId(notePosition), duration: noteDuration });
         setResizing(false);
-    }
+    };
 
     return (
         <Draggable handle=".note-bg" defaultClassName="absolute" nodeRef={nodeRef} axis="y" bounds="parent" grid={[GRID_X, GRID_SIZE_Y]} position={{x: notePosition[0], y: notePosition[1]}} onStart={onStart} onDrag={onDrag} onStop={onStop}>
             <div ref={nodeRef} className={`box-border flex flex-row ${resizing ? "cursor-ew-resize" : "cursor-move"}`} style={{width: GRID_X * durationGridded, height: GRID_SIZE_Y}}>
-                <div className="note-bg bg-white w-full h-full"></div>
+                <div className={twMerge("note-bg w-full h-full border border-solid box-border", notePositionToId(notePosition)[1] === 0 ? "bg-black border-white" : "bg-white border-black")}></div>
                 <div className="relative h-full w-0">
                     {
                         lastNote && 
