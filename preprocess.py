@@ -108,8 +108,12 @@ for file_index in range(file_count):
                         
                     melody = []
                     hasNote = False
+
+
+                    #go through notes and rests and add them to melody
                     for note in notes:
                         durationStr = durationToString(note.duration.quarterLength)
+                            
                         if durationStr == "0.00":
                             continue
                         if isinstance(note, music21.note.Rest):
@@ -183,8 +187,11 @@ for file_index in range(file_count):
                 melodyData.append([])
 
             
+
+            # Add time signature and key signature to the beginning of the melody
+
             key_sig = key_signature.name[(len(key_signature.name)) - 5:]
-            melodyData[file_index].insert(0, key_sig + str(time_signature.ratioString))
+            melodyData[file_index].insert(0, (key_sig, str(time_signature.ratioString)))
 
 
 
@@ -198,13 +205,52 @@ for file_index in range(file_count):
     except Exception as e:
         if display_file_output:
             traceback.print_exc()
-print()
 
-melody = []
+# go through melodyData and if the note is being held out for more than 1 beat, then use 'C' to represent 1 beat that note is held out for
+
+part = [('major', '3/4'), (11, '0.5'), (11, '1.00'), (11, '2.00'), (8, '1.00'), (8, '2.00')]
+
+
+newPart = []
+newMelodyData: list[list[(int, float)]] = []
+i = 0
+
+for i in range(len(melodyData)):
+    part = melodyData[i]
+    #current and next
+    while i < len(part):
+        j = 1
+        currentPitch = part[i][0]
+
+        #append current part to newPart
+        newPart.append(part[i])
+
+        #check if out of bounds
+        if(i + j < len(part)):
+            nextPitch = part[i + j][0]
+
+        #check if current pitch is the same as the next pitch
+        while(currentPitch == nextPitch) and (i + j < len(part)):
+            #gets the length of the next pitch's part tuple
+            nextLength = int(float(part[i + j][1]))
+
+            #appends the current pitch to newPart for the length of the next pitch
+            for k in range(nextLength):
+                newPart.append((currentPitch, 'C'))
+            j += 1
+            if(i + j < len(part)):
+                nextPitch = part[i + j][0]  
+
+        
+        i += j
+
+    newMelodyData.append(newPart)
+    
+print(newMelodyData)    
 
 # output the note data to a file
 with open("out/melodyData.txt", "w") as file:
-    file.write(str(melodyData))
+    file.write(str(newMelodyData))
 
 
 with open("out/keys.txt", "w") as file:
