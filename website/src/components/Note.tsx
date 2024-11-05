@@ -1,7 +1,7 @@
 import { GRID_SIZE_X, GRID_SIZE_Y } from "@/util/config";
 import { useRef, useState } from "react";
 import Draggable, { DraggableEvent } from "react-draggable";
-import { EDITOR_HEIGHT, EDITOR_WIDTH, noteIdToPosition, NoteInfo, notePositionToId } from "./Editor";
+import { EDITOR_HEIGHT, noteIdToPosition, NoteInfo, notePositionToId } from "./Editor";
 import { twMerge } from "tailwind-merge";
 
 interface NoteProps {
@@ -9,10 +9,11 @@ interface NoteProps {
     duration: number;
     gridMultiplier: number;
     lastNote: boolean;
+    EDITOR_WIDTH: number;
     updateNote: (note: NoteInfo) => void;
 }
 
-export default function Note({ position, duration, gridMultiplier, lastNote, updateNote }: NoteProps) {
+export default function Note({ position, duration, gridMultiplier, lastNote, EDITOR_WIDTH, updateNote }: NoteProps) {
     const nodeRef = useRef(null);
     const nodeRefEnd = useRef(null);
     const noteStartRef = useRef([0, 0]);

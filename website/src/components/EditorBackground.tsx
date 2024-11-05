@@ -1,7 +1,7 @@
 "use client";
-import { BORDER_WIDTH, GRID_SIZE_Y, MAX_GRID_X, NOTE_COUNT, PIANO_KEY_GAP, PIANO_KEY_WIDTH, QUARTER_GRID_X } from "@/util/config";
+import { BORDER_WIDTH, GRID_SIZE_Y, NOTE_COUNT, PIANO_KEY_GAP, PIANO_KEY_WIDTH, QUARTER_GRID_X } from "@/util/config";
 import React, { useRef, useState } from "react";
-import { EDITOR_HEIGHT, EDITOR_WIDTH, getNoteColor, noteIdToPosition, notePositionToId } from "./Editor";
+import { EDITOR_HEIGHT, getNoteColor, noteIdToPosition, notePositionToId } from "./Editor";
 
 interface EditorBackgroundProps {
   musicKey: number;
@@ -10,9 +10,12 @@ interface EditorBackgroundProps {
   verticalLinesPerWhole: number;
   verticalLineBeatInterval: number;
   notes: React.ReactNode;
+  EDITOR_WIDTH: number;
+  MAX_GRID_X: number;
+  onTestNote: (note: number, shouldRelease?: boolean) => void;
 }
 
-export function EditorBackground({ musicKey: key, octave, verticalLinesPerQuarter, verticalLinesPerWhole, verticalLineBeatInterval, notes }: EditorBackgroundProps) {
+export function EditorBackground({ musicKey: key, octave, verticalLinesPerQuarter, verticalLinesPerWhole, verticalLineBeatInterval, notes, EDITOR_WIDTH, MAX_GRID_X, onTestNote }: EditorBackgroundProps) {
   const [hoveredIndex, setHoveredIndex] = useState(-1);
   const editorRef = useRef<HTMLDivElement>(null);
 
@@ -20,8 +23,8 @@ export function EditorBackground({ musicKey: key, octave, verticalLinesPerQuarte
     const rect = editorRef.current?.getBoundingClientRect();
     if (!rect)
       return;
-    const mouseY = e.clientY - rect.top - 4;
-    if (mouseY < 0 || mouseY >= EDITOR_HEIGHT) {
+    const mouseX = e.clientX - rect.left - 4, mouseY = e.clientY - rect.top - 4;
+    if (mouseY < 0 || mouseY >= EDITOR_HEIGHT || mouseX < 0 || mouseX >= EDITOR_WIDTH + PIANO_KEY_GAP + PIANO_KEY_WIDTH) {
       setHoveredIndex(-1);
       return;
     }
@@ -31,7 +34,7 @@ export function EditorBackground({ musicKey: key, octave, verticalLinesPerQuarte
   return (
     <div ref={editorRef} className={`m-auto relative overflow-hidden border-4 border-black border-solid w-fit flex flex-row`} style={{ height: EDITOR_HEIGHT }} onMouseEnter={onMouseMove} onMouseMove={onMouseMove} onMouseLeave={onMouseMove}>
       <div className="h-full">
-        <svg width={PIANO_KEY_WIDTH + PIANO_KEY_GAP} height={EDITOR_HEIGHT}>
+        <svg className="select-none" width={PIANO_KEY_WIDTH + PIANO_KEY_GAP} height={EDITOR_HEIGHT}>
           <rect className="grid-border-quarter" width={PIANO_KEY_WIDTH} height={EDITOR_HEIGHT} fill="none" />
           <g className="grid-border">
             { /* Piano keys */
@@ -39,7 +42,7 @@ export function EditorBackground({ musicKey: key, octave, verticalLinesPerQuarte
                 const y = noteIdToPosition([0, i + 1])[1];
                 return (
                   <g key={y}>
-                    <rect x={0} y={y} width={PIANO_KEY_WIDTH} height={GRID_SIZE_Y} fill={getNoteColor(key, i + 1, i + 1 === hoveredIndex)} />
+                    <rect onMouseDown={() => onTestNote(i + 1)} onMouseUp={() => onTestNote(i + 1, true)} x={0} y={y} width={PIANO_KEY_WIDTH} height={GRID_SIZE_Y} fill={getNoteColor(key, i + 1, i + 1 === hoveredIndex)} />
                     {(i + key) % 12 === 0 && <text x={PIANO_KEY_WIDTH - 4} y={y + GRID_SIZE_Y / 2} dominantBaseline="middle" textAnchor="end" fontSize={GRID_SIZE_Y - 2}>C{Math.floor((i + key) / 12) + octave}</text>}
                   </g>
                 );
