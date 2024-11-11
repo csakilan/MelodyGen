@@ -141,10 +141,7 @@ export default function Editor() {
     // if (notes.current.length > 0 && notes.current[notes.current.length - 1].position[0] === 0)
     //   notes.current[notes.current.length - 1].duration += Math.min(4, EDITOR_COLS - x);
     // else
-    notes.current.push({
-      position: [x, 0],
-      duration: Math.min(4, EDITOR_COLS - x),
-    });
+    notes.current.push({ position: [x, 0], duration: Math.min(QUARTER_SUBDIVISIONS, EDITOR_COLS - x) });
     forceUpdate();
   };
 
@@ -231,11 +228,8 @@ export default function Editor() {
     }
   };
   useEffect(() => {
-    if (backgroundRef.current)
-      backgroundRef.current.onwheel = (e) => {
-        e.preventDefault();
-        backgroundRef.current!.scrollLeft += e.deltaY;
-      };
+    // if (backgroundRef.current)
+    //   backgroundRef.current.onwheel = e => { e.preventDefault(); backgroundRef.current!.scrollLeft += e.deltaY; };
   }, [backgroundRef]);
 
   useEffect(() => {

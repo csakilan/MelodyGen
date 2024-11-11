@@ -12,14 +12,16 @@ import warnings
 
 import music21.midi.translate
 
+#from cleanUpMelody import *
+
 # load files from all given folders
-read_all_files = False
+read_all_files = True
 include_triplets = True
 folders_to_load = ["Mono-Melodies-All/Flute","Mono-Melodies-All/Clarinet","Mono-Melodies-All/Choir Aahs", "Mono-Melodies-All/Alto Sax", "Mono-Melodies-All/Acoustic Guitar", "Mono-Melodies-All/Acoustic Grand Piano"] if read_all_files else ["Mono-Melodies-All/Flute"]
 
 files = []
 
-file_limit = -1 if read_all_files else 10
+file_limit = -1 if read_all_files else 5
 file_count = 0
 note_count = 0
 display_output = False
@@ -43,7 +45,6 @@ for folder in folders_to_load:
             print(f"\33[2KFound {path} ({file_count} files)", end="\r")
 print()
 
-
 def durationToString(duration: float | Fraction) -> str:
     if isinstance(duration, Fraction):
         duration = float(duration.numerator) / duration.denominator
@@ -57,23 +58,120 @@ warnings.filterwarnings("ignore", category=music21.midi.translate.TranslateWarni
 # isolate the flute part
 # or any single melody
 melodyData: list[list[(int, float)]] = []
+
+
+def cleanUpMelody():
+    global notes, note_count
+
+    
+    # Do not try to add a melody if there are no notes
+    if len(notes) <= 16:
+        return
+    
+    for n in range(len(notes) - 1):
+        # cut overlapping notes short
+        if((notes[n].offset + notes[n].duration.quarterLength) > notes[n+1].offset):
+            notes[n].duration.quarterLength = notes[n+1].offset - notes[n].offset
+            ratio = notes[n].duration.quarterLength.as_integer_ratio()
+            if not(4 % ratio[1] == 0 or (ratio[1] == 3)):
+                return
+        
+    melody = []
+    hasNote = False
+
+
+    #go through notes and rests and add them to melody
+    for note in notes:
+    
+        durationStr = durationToString(note.duration.quarterLength)
+            
+        if durationStr == "0.00":
+            continue
+        if isinstance(note, music21.note.Rest):
+            # Condense rests to be shorter than a measure
+            if len(melody) > 0 and melody[-1][0] == 0:
+                dur = (Fraction(durationStr) + Fraction(melody[-1][1])) % time_signature.numerator
+                if dur == 0:
+                    dur = time_signature.numerator
+                melody[-1] = (0, durationToString(dur))
+            else:
+                #print(durationStr)
+                melody.append((0, durationStr))
+        else:
+            melody.append((note.pitch.midi, durationStr))
+            hasNote = True
+    
+    # Do not add melodies that do not contain notes (only contains rests)
+    # Also check if melody is too short after overlapping notes cut short to 0 were removed
+    if not hasNote or len(melody) <= 16:
+        return
+    
+    # remove high octave pitches 
+    integers = [note[0] for note in melody if note[0] != 0]
+    min_pitch = min(integers)
+    max_pitch = max(integers)
+    pitch_range = max_pitch - min_pitch
+
+    # remove melodies with a range greater than 36
+    if(pitch_range > 36):
+        return
+    
+    root = key_signature.tonic.midi % 12
+    # offset is largest root that is <= min_pitch
+    offset = min_pitch % 12 - root
+    offset = offset if offset <= 0 else offset - 12
+    melody = [(note[0] - (min_pitch + offset) + 1, note[1]) if note[0] != 0 else note for note in melody]
+
+    part = []
+
+    # (11, 2.00) -> (11, 1.00), (C, C)
+    for i, note in enumerate(melody):
+        duration = Fraction(note[1])
+        f_part = 1 if duration % 1 == 0 else duration % 1
+        part.append((note[0], durationToString(f_part)))
+        duration -= f_part
+        while duration > 0:
+            part.append(('C', 'C'))
+            duration -= 1
+
+    melody = part
+
+    if timeSigFound == True:
+
+        # PREPEND-------------------- time signature and key signature to melody
+        key_sig = key_signature.name[(len(key_signature.name)) - 5:]
+        melody.insert(0, (key_sig, str(time_signature.ratioString)))
+        
+    else:
+        return
+        
+    note_count += len(melody)
+    melodyData.append(melody)
+    if display_output:
+        print("Added melody of", len(melody), "notes from", part.partName)
+    notes = []
+
+
 for file_index in range(file_count):
     file = files[file_index]
     if display_file_output:
         progress = (file_index + 1) / file_count * 100
         progress_int = int(round(progress / (100 / PROGRESS_CHARACTERS)))
         last_slash = file.rfind("/")
+        print(f'\33[2K[{"#" * progress_int}{"-" * (PROGRESS_CHARACTERS - progress_int)}] {progress:.1f}% - {file[:last_slash] + "/" + file[last_slash + 1:last_slash+7] + "..."} ({len(melodyData)} melodies, {note_count} notes)', end="\r")
         #print(f"\33[2K[{"#" * progress_int}{"-" * (PROGRESS_CHARACTERS - progress_int)}] {progress:.1f}% - {file[:last_slash] + "/" + file[last_slash + 1:last_slash+7] + "..."} ({len(melodyData)} melodies, {note_count} notes)", end="\r")
     try:
         stream = music21.instrument.partitionByInstrument(music21.converter.parse(file, format="midi"))
         key_signature: key.Key = stream.analyze("key")
         keys.append(str(key_signature))
+        
 
         timeSigFound = False
         timeSig = ""
 
 
         for part in stream.parts:
+            
             if part.partName is not None:
                 notes: list[music21.note.Note | music21.note.Rest] = []
                 shouldSkip = False
@@ -89,76 +187,23 @@ for file_index in range(file_count):
 
                 timeSig = str(time_signature.ratioString)
                 timeSigFound = True
-                #print(time_signature.ratioString + str(key_signature))
 
-                def cleanUpMelody():
-                    global notes, note_count
-                    
-                    # Do not try to add a melody if there are no notes
-                    if len(notes) <= 16:
-                        return
-                    
-                    for n in range(len(notes) - 1):
-                        # cut overlapping notes short
-                        if((notes[n].offset + notes[n].duration.quarterLength) > notes[n+1].offset):
-                            notes[n].duration.quarterLength = notes[n+1].offset - notes[n].offset
-                            ratio = notes[n].duration.quarterLength.as_integer_ratio()
-                            if not(4 % ratio[1] == 0 or (ratio[1] == 3 and include_triplets)):
-                                return
-                        
-                    melody = []
-                    hasNote = False
-                    for note in notes:
-                        durationStr = durationToString(note.duration.quarterLength)
-                        if durationStr == "0.00":
-                            continue
-                        if isinstance(note, music21.note.Rest):
-                            # Condense rests to be shorter than a measure
-                            if len(melody) > 0 and melody[-1][0] == 0:
-                                dur = (Fraction(durationStr) + Fraction(melody[-1][1])) % time_signature.numerator
-                                if dur == 0:
-                                    dur = time_signature.numerator
-                                melody[-1] = (0, durationToString(dur))
-                            else:
-                                melody.append((0, durationStr))
-                        else:
-                            melody.append((note.pitch.midi, durationStr))
-                            hasNote = True
-                    
-                    # Do not add melodies that do not contain notes (only contains rests)
-                    # Also check if melody is too short after overlapping notes cut short to 0 were removed
-                    if not hasNote or len(melody) <= 16:
-                        return
-                    
-                    # remove high octave pitches 
-                    integers = [note[0] for note in melody if note[0] != 0]
-                    min_pitch = min(integers)
-                    max_pitch = max(integers)
-                    pitch_range = max_pitch - min_pitch
-
-                    # remove melodies with a range greater than 36
-                    if(pitch_range > 36):
-                        return
-                    
-                    root = key_signature.tonic.midi % 12
-                    # offset is largest root that is <= min_pitch
-                    offset = min_pitch % 12 - root
-                    offset = offset if offset <= 0 else offset - 12
-                    melody = [(note[0] - (min_pitch + offset) + 1, note[1]) if note[0] != 0 else note for note in melody]
-
-                    note_count += len(melody)
-                    melodyData.append(melody)
-                    if display_output:
-                        print("Added melody of", len(melody), "notes from", part.partName)
-                    notes = []
-                
                 for note in part.notesAndRests:
+                    
                     # remove melodies that contain notes with odd fractions
                     dur = (note.duration.quarterLength).as_integer_ratio()
-                    if not(4 % dur[1] == 0 or (dur[1] == 3 and include_triplets)):
-                        #print(note.duration.quarterLength)
+                    duration = note.duration.quarterLength
+
+                    if not(4 % dur[1] == 0):
                         shouldSkip = True
                         break
+                    
+                    # remove melodies that contain triplets or 0.67
+                    if ("Triplet" in note.fullName or str(note.duration.quarterLength) == "0.67"):
+                        print(note.fullName)
+                        shouldSkip = True
+                        break
+
                     
                     # record rests as '0'
                     if isinstance(note, music21.note.Rest):
@@ -173,34 +218,20 @@ for file_index in range(file_count):
                         # if a chord is found, skip the entire part
                         shouldSkip = True
                         break
-                    
+             
                 if not shouldSkip:
                     cleanUpMelody()
-
-        if timeSigFound == True:
-            # Ensure melodyData has enough elements
-            while len(melodyData) <= file_index:
-                melodyData.append([])
-
-            
-            key_sig = key_signature.name[(len(key_signature.name)) - 5:]
-            melodyData[file_index].insert(0, key_sig + str(time_signature.ratioString))
-
-
-
-            
-        #time_signature: meter.TimeSignature = stream.flat.getElementsByClass(meter.TimeSignature)[0]
         
-
-
     except midi.MidiException as e:
         print(f"Error reading {file}: {e}\n")
     except Exception as e:
         if display_file_output:
             traceback.print_exc()
-print()
 
-melody = []
+
+i = 0
+
+    
 
 # output the note data to a file
 with open("out/melodyData.txt", "w") as file:
