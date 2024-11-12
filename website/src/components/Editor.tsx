@@ -93,6 +93,7 @@ export default function Editor() {
   const [octave, setOctave] = useState(3);
   const [measureCount, setMeasureCount] = useState(8);
   const [quartersPerBar, setQuartersPerBar] = useState(4);
+  const [isMinor, setIsMinor] = useState(false);
   const synth = useRef<Tone.Sampler>();
   const previousPart = useRef<Tone.Part>();
   const forceUpdate = () => _upd((x) => x + 1);
@@ -208,28 +209,29 @@ export default function Editor() {
     console.log(notes.current);
   };
   const [futureNotes, getPredictions] = useState([]);
+  const [isGenerating, setIsGenerating] = useState(false);
   const onPredNotes = async () => {
-    const currNotes = [5, 10, 15, 20]; // Example array to send
+    if (isGenerating)
+      return;
+    setIsGenerating(true);
+    // Convert notes to model input form
+    const currNotes = notes.current.map(note => [note.position[1], (note.duration / QUARTER_SUBDIVISIONS).toFixed(2)]); [5, 10, 15, 20]; // Example array to send
+    // Add major/minor 4/4
+    currNotes.unshift(isMinor ? ["minor", "4/4"] : ["major", "4/4"]);
 
     try {
-      const response = await fetch("/predict", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ array: currNotes }),
-      });
-
-      const data = await response.json();
-      getPredictions(data.newtings); // Save the response array
-      console.log(futureNotes);
+      const data = await fetch("/generate", { method: "POST", body: JSON.stringify({ notes: currNotes }) }).then(res => res.json());
+      if (!data)
+        throw "Failed to fetch data";
+      getPredictions(data.notes); // Save the response array
     } catch (error) {
       console.error("Error sending data:", error);
     }
+    setIsGenerating(false);
   };
   useEffect(() => {
-    // if (backgroundRef.current)
-    //   backgroundRef.current.onwheel = e => { e.preventDefault(); backgroundRef.current!.scrollLeft += e.deltaY; };
+    if (backgroundRef.current)
+      backgroundRef.current.onwheel = e => { e.preventDefault(); backgroundRef.current!.scrollLeft += e.deltaX ? e.deltaX : e.deltaY; };
   }, [backgroundRef]);
 
   useEffect(() => {
@@ -364,6 +366,8 @@ export default function Editor() {
                   </option>
                 ))}
             </select>
+            <label htmlFor="minor">Minor?</label>
+            <input type="checkbox" checked={isMinor} onChange={e => setIsMinor(e.target.checked)} />
           </div>
           <div className="flex flex-row gap-x-4 justify-center items-center">
             <Button onClick={onAddNote}>Add Note</Button>
@@ -371,9 +375,9 @@ export default function Editor() {
             <Button onClick={onRemoveNote}>Remove Last Note</Button>
             <Button onClick={onLogNotes}>Log Notes</Button>
             <Button onClick={onPlayNotes}>Play Notes</Button>
-            <Button onClick={onPredNotes}>Generate</Button>
+            <Button onClick={onPredNotes}>{isGenerating ? "Generating..." : "Generate"}</Button>
             <h3>Saved Arrays:</h3>
-            <pre>{JSON.stringify(futureNotes, null, 2)}</pre>
+            <pre>{JSON.stringify(futureNotes.slice(0, 5), null, 2)}</pre>
           </div>
         </div>
       </div>
