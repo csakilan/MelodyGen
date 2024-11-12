@@ -2,3 +2,4 @@ Mono-Melodies-All/*
 *.mid
 *.midi
 out/*
+__pycache__/
