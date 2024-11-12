@@ -5,7 +5,7 @@ import numpy as np
 app = Flask(__name__)
 
 # Load the model
-with open('out/encodings.txt', 'r') as file:
+with open('encodings.txt', 'r') as file:
     encodings = eval(file.read())
 
 # decoder constructed by reversing one-hot encoding
@@ -21,8 +21,6 @@ model = tf.keras.models.Sequential([
     tf.keras.layers.Dense(len(encodings), activation='softmax')
 ])
 
-optimizer = tf.keras.optimizers.Adam(learning_rate=.002)
-model.compile(optimizer=optimizer, loss='categorical_crossentropy', metrics=['accuracy'])
 model.load_weights("checkpoints/model_full_v1.h5")
 
 
@@ -35,18 +33,26 @@ def predict():
     print(data)
     # Convert newNotes to model input format
     newNotes = [encodings[tuple(note)] for note in data["notes"]]
+    addedNotes = []
     X = []
     for encoding in newNotes:
         one_hot = np.zeros(len(encodings))
         one_hot[encoding] = 1
         X.append(one_hot)
     
-    model.reset_states()
-    Y = []
-    for note in X:
-        Y.append(model.predict_on_batch(note.reshape(1, 1, len(encodings))))
+    # Generate new notes
+    for i in range(20):
+        model.reset_states()
+        Y = []
+        for note in X:
+            Y.append(model.predict_on_batch(note.reshape(1, 1, len(encodings))))
+        one_hot = np.zeros(len(encodings))
+        one_hot[np.argmax(Y[-1])] = 1
+        X.append(one_hot)
+        addedNotes.append(decodings[np.argmax(Y[-1])])
+
     response = {
-        "notes": [decodings[np.argmax(y)] for y in Y[-1:]]
+        "notes": addedNotes
     }
     print([decodings[np.argmax(y)] for y in Y])
     return jsonify(response)
