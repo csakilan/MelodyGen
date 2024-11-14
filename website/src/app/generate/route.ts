@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export async function GET(request: NextRequest) {
-    const result = await fetch("http://127.0.0.1:8080").then(res => res.json());
+export async function POST(request: NextRequest) {
+    let success = true;
+    const result = await fetch("http://localhost:5000/predict", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: await request.text(),
+    }).then(res => res.json()).catch(e => {
+        console.log(e);
+        success = false;
+    });
+    if (!success)
+        return NextResponse.json(false);
     return NextResponse.json(result);
 }

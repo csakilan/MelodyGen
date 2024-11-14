@@ -1,6 +1,7 @@
-export const GRID_SIZE_X = 4;
+// 4 for sixteenth notes, 12 for sixteenth and triplets
+export const QUARTER_SUBDIVISIONS = 4;
+export const GRID_SIZE_X = 48 / QUARTER_SUBDIVISIONS;
 export const GRID_SIZE_Y = 16;
-export const QUARTER_SUBDIVISIONS = 12;
 export const QUARTER_GRID_X = GRID_SIZE_X * QUARTER_SUBDIVISIONS;
 export const GRID_ROWS = 38;
 export const NOTE_COUNT = 37;
