@@ -216,8 +216,22 @@ export default function Editor() {
     setIsGenerating(true);
     // Convert notes to model input form
     const currNotes = notes.current.map(note => [note.position[1], (note.duration / QUARTER_SUBDIVISIONS).toFixed(2)]); [5, 10, 15, 20]; // Example array to send
+
     // Add major/minor 4/4
     currNotes.unshift(isMinor ? ["minor", "4/4"] : ["major", "4/4"]);
+
+    console.log(currNotes);
+
+    //send data to init
+    try {
+      //first index of currNotes is the key and time signature
+      const data = await fetch("/init", { method: "POST", body: JSON.stringify({ notes: currNotes[0] }) }).then(res => res.json());
+      if (!data)
+        throw "Failed to fetch data";
+
+    } catch (error) {
+      console.error("Error sending data:", error);
+    }
 
     try {
       const data = await fetch("/generate", { method: "POST", body: JSON.stringify({ notes: currNotes }) }).then(res => res.json());
