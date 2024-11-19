@@ -61,7 +61,6 @@ def predict():
     # Convert newNotes to model input format
     userNotes = [encodings[tuple(note)] for note in data["notes"]]
     encodedUserNotes = []
-
     generatedNotes = []
 
 
@@ -69,15 +68,12 @@ def predict():
         one_hot = np.zeros(len(encodings))
         one_hot[encoding] = 1
         encodedUserNotes.append(one_hot)
-    # feed generated notes into X
-    # beats per measure can be retrieved from the token 
-    model.predict_on_batch(np.array(encodedUserNotes).reshape(len(encodedUserNotes), 1, len(encodings)))
-    generatedNotes = generate_melodies(num_melodies=3, measures=4, beats_per_measure=4)
-   
-
     
-
-        
+    # feed generated notes into X
+    # beats per measure can be retrieved from the token
+    for note in encodedUserNotes:
+        model.predict_on_batch(note.reshape(1, 1, len(encodings)))
+    generatedNotes = generate_melodies(num_melodies=3, measures=4, beats_per_measure=4)
     
     '''# Generate new notes
     for i in range(20):
@@ -96,7 +92,7 @@ def predict():
 
     # print([decodings[np.argmax(y)] for y in Y])
     
-    return jsonify(generatedNotes)
+    return jsonify(response)
 
 def generate_melodies(num_melodies=3, measures=4, beats_per_measure=4):
     global model  # Use the global model variable

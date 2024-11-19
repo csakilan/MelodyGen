@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import Note from "./Note";
+import { createContext, useEffect, useRef, useState } from "react";
 import {
   GRID_ROWS,
   GRID_SIZE_X,
@@ -18,6 +17,7 @@ import Button from "./Button";
 import * as Tone from "tone";
 import Slider from "./Slider";
 import { EditorBackground } from "./EditorBackground";
+import MelodyOption, { scale } from "./MelodyOption";
 
 // export const EDITOR_COLS = QUARTER_SUBDIVISIONS * QUARTERS_PER_BAR * 8;
 // export const EDITOR_WIDTH = EDITOR_COLS * GRID_SIZE_X;
@@ -80,6 +80,21 @@ export const notePositionToId = (pos: number[]) => {
   return [pos[0] / GRID_SIZE_X, NOTE_COUNT - pos[1] / GRID_SIZE_Y];
 };
 
+export interface EditorSettings {
+  quartersPerBar: number;
+  gridMultiplier: number;
+  EDITOR_WIDTH: number;
+  verticalLinesPerQuarter: number;
+  verticalLinesPerWhole: number;
+  verticalLineBeatInterval: number;
+  MAX_GRID_X: number;
+};
+
+export const EditorContext = createContext<EditorSettings>({quartersPerBar: 4, gridMultiplier: 2, EDITOR_WIDTH: 0, verticalLinesPerQuarter: 4, verticalLinesPerWhole: 4, verticalLineBeatInterval: 1, MAX_GRID_X: 0});
+
+export const GeneratedMelodyColors = ["#fff", "#f44", "#4f4", "#44f"];
+export const GeneratedMelodyColorsDesaturated = ["#fff", "#f88", "#bfb", "#88f"];
+
 export default function Editor() {
   // State to force update
   const [_, _upd] = useState(0);
@@ -94,6 +109,12 @@ export default function Editor() {
   const [measureCount, setMeasureCount] = useState(8);
   const [quartersPerBar, setQuartersPerBar] = useState(4);
   const [isMinor, setIsMinor] = useState(false);
+  const [generatedMelodies, setGeneratedMelodies] = useState<NoteInfo[][]>([]);
+  const [hoveredMelody, setHoveredMelody] = useState(-1);
+  const [selectedMelody, setSelectedMelody] = useState(-1);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [tryingToClear, setTryingToClear] = useState(false);
+  const clearTimeoutRef = useRef<NodeJS.Timeout | undefined>();
   const synth = useRef<Tone.Sampler>();
   const previousPart = useRef<Tone.Part>();
   const forceUpdate = () => _upd((x) => x + 1);
@@ -121,14 +142,14 @@ export default function Editor() {
     );
     if (x >= EDITOR_COLS) {
       console.log("Cannot add note, out of space");
-      return;
+      return -1;
     }
     return x;
   };
 
   const onAddNote = () => {
     const x = getInsertPos();
-    if (x === undefined) return;
+    if (x < 0) return;
     notes.current.push({
       position: [x, 13],
       duration: Math.min(QUARTER_SUBDIVISIONS, EDITOR_COLS - x),
@@ -138,7 +159,7 @@ export default function Editor() {
 
   const onAddRest = () => {
     const x = getInsertPos();
-    if (x === undefined) return;
+    if (x < 0) return;
     // if (notes.current.length > 0 && notes.current[notes.current.length - 1].position[0] === 0)
     //   notes.current[notes.current.length - 1].duration += Math.min(4, EDITOR_COLS - x);
     // else
@@ -154,6 +175,34 @@ export default function Editor() {
     notes.current.pop();
     forceUpdate();
   };
+
+  const onClear = () => {
+    if (!tryingToClear) {
+      setTryingToClear(true);
+      clearTimeoutRef.current = setTimeout(() => setTryingToClear(false), 2000);
+      return;
+    }
+    clearTimeout(clearTimeoutRef.current);
+    notes.current = [];
+    setGeneratedMelodies([]);
+    setTryingToClear(false);
+  };
+
+  const onAddMeasure = () => {
+    setMeasureCount((i) => Math.min(MAX_MEASURES, i + 1));
+  };
+
+  const onRemoveMeasure = () => {
+    setMeasureCount((i) => Math.max(MIN_MEASURES, i - 1));
+  };
+
+  useEffect(() => {
+    const newNotes = notes.current.filter((note) => note.position[0] < EDITOR_COLS);
+    if (newNotes.length !== notes.current.length) {
+      notes.current = newNotes;
+      forceUpdate();
+    }
+  }, [measureCount]);
 
   const getDurationStr = (duration: number) =>
     `${duration / QUARTER_SUBDIVISIONS}n`;
@@ -200,7 +249,7 @@ export default function Editor() {
     else
       synth.current?.triggerAttackRelease(
         convertNote({ position: [0, id], duration: 4 }).note,
-        "3n"
+        "1n"
       );
     Tone.getTransport().start();
   };
@@ -208,41 +257,96 @@ export default function Editor() {
   const onLogNotes = () => {
     console.log(notes.current);
   };
-  const [futureNotes, getPredictions] = useState([]);
-  const [isGenerating, setIsGenerating] = useState(false);
+
   const onPredNotes = async () => {
     if (isGenerating)
       return;
+    setGeneratedMelodies([]);
     setIsGenerating(true);
     // Convert notes to model input form
-    const currNotes = notes.current.map(note => [note.position[1], (note.duration / QUARTER_SUBDIVISIONS).toFixed(2)]); [5, 10, 15, 20]; // Example array to send
-
-    // Add major/minor 4/4
-    currNotes.unshift(isMinor ? ["minor", "4/4"] : ["major", "4/4"]);
-
-    console.log(currNotes);
-
-    //send data to init
-    try {
-      //first index of currNotes is the key and time signature
-      const data = await fetch("/init", { method: "POST", body: JSON.stringify({ notes: currNotes[0] }) }).then(res => res.json());
-      if (!data)
-        throw "Failed to fetch data";
-
-    } catch (error) {
-      console.error("Error sending data:", error);
+    const currNotes = [];
+    // Change durations above 1 to f_part followed by ('C', 'C') for each additional beat
+    for (const note of notes.current) {
+      let duration = note.duration / QUARTER_SUBDIVISIONS;
+      const f_part = duration % 1 == 0 ? 1 : duration % 1;
+      currNotes.push([note.position[1], (f_part).toFixed(2)])
+      duration -= f_part
+      while (duration > 0) {
+        currNotes.push(['C', 'C']);
+        duration -= 1
+      }
     }
+    // Add major/minor 4/4
+    currNotes.unshift([isMinor ? "minor" : "major", `${quartersPerBar}/4`]);
+    
+    const setPredictedNotes = ({ notes }: { notes: any[][] }) => {
+      // Convert the response array to position/duration
+      const newGeneratedMelodies: NoteInfo[][] = [];
+      for (const melody of notes) {
+        let x = getInsertPos();
+        let currentNote: NoteInfo | null = null;
+        const generated: NoteInfo[] = [];
+        const addCurrentNote = () => {
+          if (!currentNote || currentNote.duration + x > EDITOR_COLS)
+            return;
+          generated.push(currentNote);
+          x += currentNote.duration;
+        };
+        for (const decoding of melody) {
+          // Handle "C" (continue)
+          if (decoding[0] === "C") {
+            if (currentNote == null)
+              throw "Invalid decoding, (continue) cannot be the first note";
+            currentNote.duration += QUARTER_SUBDIVISIONS;
+          }
+          else {
+            currentNote && addCurrentNote();
+            currentNote = {position: [x, decoding[0]], duration: parseFloat(decoding[1]) * QUARTER_SUBDIVISIONS};
+          }
+        }
+        // Add the last note
+        addCurrentNote();
+        newGeneratedMelodies.push(generated);
+      }
+      // Save the response array
+      setGeneratedMelodies(newGeneratedMelodies);
+    };
 
+    if (currNotes.length === 1) {
+      //send data to init
+      try {
+        //first index of currNotes is the key and time signature
+        const data = await fetch("/init", { method: "POST", body: JSON.stringify({ notes: currNotes[0] }) }).then(res => res.json());
+        if (!data)
+          throw "Failed to fetch data";
+        } catch (error) {
+        console.error("Error sending data:", error);
+      }
+    }
+    // Generate notes
     try {
-      const data = await fetch("/generate", { method: "POST", body: JSON.stringify({ notes: currNotes }) }).then(res => res.json());
+      const data = await fetch("/generate", { method: "POST", body: JSON.stringify({ notes: currNotes }) }).then(res => res.json()).catch(console.error);
       if (!data)
         throw "Failed to fetch data";
-      getPredictions(data.notes); // Save the response array
+      setPredictedNotes(data);
     } catch (error) {
       console.error("Error sending data:", error);
     }
     setIsGenerating(false);
   };
+
+  const getHoverMelodyOptionHandler = (i: number) => () => setHoveredMelody(i);
+  const getHoverEndMelodyOptionHandler = (i: number) => () => i == hoveredMelody && setHoveredMelody(-1);
+  const getSelectMelodyOptionHandler = (i: number) => () => selectedMelody == i ? setSelectedMelody(-1) : setSelectedMelody(i);
+  const getApplyMelodyOptionHandler = (i: number) => () => {
+    if (i < 0 || i >= generatedMelodies.length)
+      return;
+    notes.current = notes.current.concat(generatedMelodies[i]);
+    setGeneratedMelodies([]);
+    setSelectedMelody(-1);
+    setHoveredMelody(-1);
+  };
+
   useEffect(() => {
     if (backgroundRef.current)
       backgroundRef.current.onwheel = e => { e.preventDefault(); backgroundRef.current!.scrollLeft += e.deltaX ? e.deltaX : e.deltaY; };
@@ -261,7 +365,7 @@ export default function Editor() {
   }, []);
 
   return (
-    <div>
+    <EditorContext.Provider value={{gridMultiplier, quartersPerBar, EDITOR_WIDTH, verticalLinesPerQuarter, verticalLinesPerWhole, verticalLineBeatInterval, MAX_GRID_X}}>
       <div
         ref={backgroundRef}
         className="m-auto overflow-x-auto"
@@ -276,28 +380,26 @@ export default function Editor() {
         <EditorBackground
           musicKey={key}
           octave={octave}
-          verticalLinesPerQuarter={verticalLinesPerQuarter}
-          verticalLinesPerWhole={verticalLinesPerWhole}
-          verticalLineBeatInterval={verticalLineBeatInterval}
-          notes={
-            <div className="relative w-full h-full">
-              {notes.current.map((note, i) => (
-                <Note
-                  key={i}
-                  position={note.position}
-                  duration={note.duration}
-                  gridMultiplier={gridMultiplier}
-                  lastNote={i == notes.current.length - 1}
-                  EDITOR_WIDTH={EDITOR_WIDTH}
-                  updateNote={getUpdateNoteHandler(i)}
-                />
-              ))}
-            </div>
-          }
-          EDITOR_WIDTH={EDITOR_WIDTH}
-          MAX_GRID_X={MAX_GRID_X}
+          notes={notes.current}
+          generatedMelodies={generatedMelodies}
+          hoveredMelody={hoveredMelody}
+          selectedMelody={selectedMelody}
           onTestNote={onTestNote}
+          getUpdateNoteHandler={getUpdateNoteHandler}
         />
+      </div>
+      <div className="m-auto w-[80%]">
+        <h1>Melody Options</h1>
+        {
+          generatedMelodies.length === 0 ? isGenerating ? <div>Generating...</div> : <div>Generate a melody first</div> :
+          <div className="flex flex-row justify-center gap-x-4" style={{height: EDITOR_HEIGHT * scale + 8}}>
+            {
+              generatedMelodies.map((melody, i) => 
+                <MelodyOption key={i} melody={melody} optionIndex={i + 1} selected={i == selectedMelody} onHover={getHoverMelodyOptionHandler(i)} onHoverEnd={getHoverEndMelodyOptionHandler(i)} onSelect={getSelectMelodyOptionHandler(i)} onApply={getApplyMelodyOptionHandler(i)} />
+              )
+            }
+          </div>
+        }
       </div>
       <div className="m-auto w-[80%]">
         <h1>Generation Options</h1>
@@ -305,16 +407,12 @@ export default function Editor() {
           <div className="flex flex-row gap-x-4 justify-center items-center">
             <div className="text-lg">{measureCount} measures</div>
             <Button
-              onClick={() =>
-                setMeasureCount((i) => Math.min(MAX_MEASURES, i + 1))
-              }
+              onClick={onAddMeasure}
             >
               Add Measure
             </Button>
             <Button
-              onClick={() =>
-                setMeasureCount((i) => Math.max(MIN_MEASURES, i - 1))
-              }
+              onClick={onRemoveMeasure}
             >
               Remove Measure
             </Button>
@@ -380,21 +478,23 @@ export default function Editor() {
                   </option>
                 ))}
             </select>
-            <label htmlFor="minor">Minor?</label>
+            <label htmlFor="minor">Minor</label>
             <input type="checkbox" checked={isMinor} onChange={e => setIsMinor(e.target.checked)} />
-          </div>
-          <div className="flex flex-row gap-x-4 justify-center items-center">
-            <Button onClick={onAddNote}>Add Note</Button>
-            <Button onClick={onAddRest}>Add Rest</Button>
-            <Button onClick={onRemoveNote}>Remove Last Note</Button>
-            <Button onClick={onLogNotes}>Log Notes</Button>
-            <Button onClick={onPlayNotes}>Play Notes</Button>
-            <Button onClick={onPredNotes}>{isGenerating ? "Generating..." : "Generate"}</Button>
-            <h3>Saved Arrays:</h3>
-            <pre>{JSON.stringify(futureNotes.slice(0, 5), null, 2)}</pre>
           </div>
         </div>
       </div>
-    </div>
+      <div className="h-32" />
+      <div className="fixed bottom-0 py-3  overflow-hidden w-full background-2">
+        <div className="flex flex-row gap-x-4 justify-center items-center ">
+          <Button onClick={onAddNote}>Add Note</Button>
+          <Button onClick={onAddRest}>Add Rest</Button>
+          <Button onClick={onRemoveNote}>Remove Last Note</Button>
+          <Button onClick={onClear} className={tryingToClear ? "!bg-red-400 hover:!bg-red-500 active:!bg-red-600" : ""}>{tryingToClear ? "Sure?" : "Clear"}</Button>
+          <Button onClick={onLogNotes}>Log Notes</Button>
+          <Button onClick={onPlayNotes}>Play Notes</Button>
+          <Button onClick={onPredNotes}>{isGenerating ? "Generating..." : "Generate"}</Button>
+        </div>
+      </div>
+    </EditorContext.Provider>
   );
 }
