@@ -1,23 +1,25 @@
 "use client";
 import { BORDER_WIDTH, GRID_SIZE_Y, NOTE_COUNT, PIANO_KEY_GAP, PIANO_KEY_WIDTH, QUARTER_GRID_X } from "@/util/config";
-import React, { useRef, useState } from "react";
-import { EDITOR_HEIGHT, getNoteColor, noteIdToPosition, notePositionToId } from "./Editor";
+import React, { useContext, useRef, useState } from "react";
+import { EDITOR_HEIGHT, EditorContext, getNoteColor, noteIdToPosition, NoteInfo, notePositionToId } from "./Editor";
+import Note from "./Note";
 
 interface EditorBackgroundProps {
   musicKey: number;
   octave: number;
-  verticalLinesPerQuarter: number;
-  verticalLinesPerWhole: number;
-  verticalLineBeatInterval: number;
-  notes: React.ReactNode;
-  EDITOR_WIDTH: number;
-  MAX_GRID_X: number;
+  notes: NoteInfo[];
+  generatedMelodies: NoteInfo[][];
+  hoveredMelody: number;
+  selectedMelody: number;
   onTestNote: (note: number, shouldRelease?: boolean) => void;
+  getUpdateNoteHandler: (index: number) => (newNote: NoteInfo) => void;
 }
 
-export function EditorBackground({ musicKey: key, octave, verticalLinesPerQuarter, verticalLinesPerWhole, verticalLineBeatInterval, notes, EDITOR_WIDTH, MAX_GRID_X, onTestNote }: EditorBackgroundProps) {
+export function EditorBackground({ musicKey: key, octave, notes, generatedMelodies, hoveredMelody, selectedMelody, onTestNote, getUpdateNoteHandler }: EditorBackgroundProps) {
+  const { EDITOR_WIDTH, MAX_GRID_X, verticalLinesPerQuarter, verticalLinesPerWhole, verticalLineBeatInterval } = useContext(EditorContext);
   const [hoveredIndex, setHoveredIndex] = useState(-1);
   const editorRef = useRef<HTMLDivElement>(null);
+  const internalEditorRef = useRef<HTMLDivElement>(null);
 
   const onMouseMove = (e: React.MouseEvent) => {
     const rect = editorRef.current?.getBoundingClientRect();
@@ -54,7 +56,7 @@ export function EditorBackground({ musicKey: key, octave, verticalLinesPerQuarte
           <rect x={PIANO_KEY_WIDTH} y={0} width={PIANO_KEY_GAP} height={EDITOR_HEIGHT} fill="#000" />
         </svg>
       </div>
-      <div style={{ width: EDITOR_WIDTH, height: EDITOR_HEIGHT }}>
+      <div style={{ width: EDITOR_WIDTH, height: EDITOR_HEIGHT }} ref={internalEditorRef}>
         <div className="relative w-full h-0 m-auto">
           <svg className="absolute m-auto left-0" width={EDITOR_WIDTH} height={EDITOR_HEIGHT} strokeWidth={BORDER_WIDTH}>
             <g>
@@ -102,7 +104,42 @@ export function EditorBackground({ musicKey: key, octave, verticalLinesPerQuarte
             </defs>
           </svg>
         </div>
-        {notes}
+        <div className="relative w-full h-full">
+          {/* Generated notes */}
+          {
+            generatedMelodies.map((melody, melodyIndex) =>
+              <div key={melodyIndex} className="absolute">
+                {melody.map((note, i) => (
+                  <Note
+                    key={i}
+                    info={note}
+                    lastNote={i == notes.length - 1}
+                    updateNote={getUpdateNoteHandler(i)}
+                    editorRef={internalEditorRef}
+                    draggable={false}
+                    optionIndex={melodyIndex + 1}
+                    saturated={melodyIndex === selectedMelody}
+                    hide={selectedMelody >= 0 && melodyIndex !== selectedMelody && melodyIndex !== hoveredMelody}
+                  />))
+                }
+              </div>
+            )
+          }
+          {/* User notes */}
+          <div className="absolute">
+            {
+              notes.map((note, i) => (
+                <Note
+                  key={i}
+                  info={note}
+                  lastNote={i == notes.length - 1}
+                  updateNote={getUpdateNoteHandler(i)}
+                  editorRef={internalEditorRef}
+                />
+              ))
+            }
+          </div>
+        </div>
       </div>
     </div>
   );
