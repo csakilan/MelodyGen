@@ -3,8 +3,7 @@
 # to convert a midi file to a music21 stream
 import os 
 # import music21
-from music21 import *
-import music21.instrument
+import music21
 from fractions import Fraction
 import time
 import traceback
@@ -116,11 +115,23 @@ def cleanUpMelody():
     if(pitch_range > 36):
         return
     
+    # analyze for the key of the melody
+    my_stream = music21.stream.Stream()
+    for note in melody:
+        if note[0] == 0:
+            my_stream.append(music21.note.Rest(quarterLength=float(note[1])))
+        else:
+            my_stream.append(music21.note.Note(midi=note[0], quarterLength=float(note[1])))
+    
+    analysis = music21.analysis.discrete.BellmanBudge()
+    key_signature: music21.key.Key = analysis.getSolution(my_stream)
+    # print("Melody key:", key_signature, key_signature.correlationCoefficient)
+
     root = key_signature.tonic.midi % 12
     # offset is largest root that is <= min_pitch
     offset = min_pitch % 12 - root
     offset = offset if offset <= 0 else offset - 12
-    melody = [(note[0] - (min_pitch + offset) + 1, note[1]) if note[0] != 0 else note for note in melody]
+    melody = [(note[0] - (min_pitch) - offset + 1, note[1]) if note[0] != 0 else note for note in melody]
 
     part = []
 
@@ -158,20 +169,18 @@ for file_index in range(file_count):
         progress = (file_index + 1) / file_count * 100
         progress_int = int(round(progress / (100 / PROGRESS_CHARACTERS)))
         last_slash = file.rfind("/")
-        print(f'\33[2K[{"#" * progress_int}{"-" * (PROGRESS_CHARACTERS - progress_int)}] {progress:.1f}% - {file[:last_slash] + "/" + file[last_slash + 1:last_slash+7] + "..."} ({len(melodyData)} melodies, {note_count} notes)', end="\r")
+        elapsed_seconds = time.time() - startTime
+        est_seconds = (file_count - file_index) / (file_index + 1) * (time.time() - startTime)
+        print(f'\33[2K[{"#" * progress_int}{"-" * (PROGRESS_CHARACTERS - progress_int)}] {progress:.1f}% - {file[:last_slash] + "/" + file[last_slash + 1:last_slash+7] + "..."} ({len(melodyData)} melodies, {note_count} notes) - Running for {int(elapsed_seconds / 60):d}:{int(elapsed_seconds % 60):02d}, est {int(est_seconds / 60):d}:{int(est_seconds % 60):02d}', end="\r")
         #print(f"\33[2K[{"#" * progress_int}{"-" * (PROGRESS_CHARACTERS - progress_int)}] {progress:.1f}% - {file[:last_slash] + "/" + file[last_slash + 1:last_slash+7] + "..."} ({len(melodyData)} melodies, {note_count} notes)", end="\r")
     try:
         stream = music21.instrument.partitionByInstrument(music21.converter.parse(file, format="midi"))
-        key_signature: key.Key = stream.analyze("key")
-        keys.append(str(key_signature))
-        
+        # print("Stream key:", stream.analyze("key"), stream.analyze("key").correlationCoefficient)
 
         timeSigFound = False
         timeSig = ""
 
-
         for part in stream.parts:
-            
             if part.partName is not None:
                 notes: list[music21.note.Note | music21.note.Rest] = []
                 shouldSkip = False
@@ -188,8 +197,8 @@ for file_index in range(file_count):
                 timeSig = str(time_signature.ratioString)
                 timeSigFound = True
 
+                note: music21.note.Note | music21.note.Rest
                 for note in part.notesAndRests:
-                    
                     # remove melodies that contain notes with odd fractions
                     dur = (note.duration.quarterLength).as_integer_ratio()
                     duration = note.duration.quarterLength
@@ -222,7 +231,7 @@ for file_index in range(file_count):
                 if not shouldSkip:
                     cleanUpMelody()
         
-    except midi.MidiException as e:
+    except music21.midi.MidiException as e:
         print(f"Error reading {file}: {e}\n")
     except Exception as e:
         if display_file_output:
