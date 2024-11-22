@@ -185,7 +185,10 @@ export default function Editor() {
     clearTimeout(clearTimeoutRef.current);
     notes.current = [];
     setGeneratedMelodies([]);
+    setSelectedMelody(-1);
+    setHoveredMelody(-1);
     setTryingToClear(false);
+    onStopNotes();
   };
 
   const onAddMeasure = () => {
@@ -227,19 +230,23 @@ export default function Editor() {
   const onPlayNotes = () => {
     // Play all the notes using Tone.js
     // Use Tone.js so notes play in order and not at the same time
-    Tone.getTransport().stop();
-    previousPart.current?.dispose();
+    onStopNotes();
     const part = (previousPart.current = new Tone.Part(
       (time, value) => {
         if (value.note === "rest") return;
         synth.current?.triggerAttackRelease(value.note, value.duration, time);
       },
-      notes.current.map((note) => convertNote(note))
+      notes.current.concat(selectedMelody >= 0 ? generatedMelodies[selectedMelody] : []).map((note) => convertNote(note))
     ));
     part.start();
     Tone.getTransport().bpm.value = bpm;
     Tone.getTransport().start();
   };
+
+  const onStopNotes = () => {
+    Tone.getTransport().stop();
+    previousPart.current?.dispose();
+  }
 
   const onTestNote = (id: number, shouldRelease: boolean = false) => {
     if (id === 0) return;
@@ -262,7 +269,10 @@ export default function Editor() {
     if (isGenerating)
       return;
     setGeneratedMelodies([]);
+    setSelectedMelody(-1);
+    setHoveredMelody(-1);
     setIsGenerating(true);
+    onStopNotes();
     // Convert notes to model input form
     const currNotes = [];
     // Change durations above 1 to f_part followed by ('C', 'C') for each additional beat
@@ -492,6 +502,7 @@ export default function Editor() {
           <Button onClick={onClear} className={tryingToClear ? "!bg-red-400 hover:!bg-red-500 active:!bg-red-600" : ""}>{tryingToClear ? "Sure?" : "Clear"}</Button>
           <Button onClick={onLogNotes}>Log Notes</Button>
           <Button onClick={onPlayNotes}>Play Notes</Button>
+          <Button onClick={onStopNotes}>Stop</Button>
           <Button onClick={onPredNotes}>{isGenerating ? "Generating..." : "Generate"}</Button>
         </div>
       </div>

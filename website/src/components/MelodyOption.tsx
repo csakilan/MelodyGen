@@ -20,7 +20,7 @@ const minWidthMeasures = 4, maxWidthMeasures = 8;
 export default function MelodyOption({ melody, optionIndex, selected, onHover, onHoverEnd, onSelect, onApply }: MelodyOptionProps) {
   const { quartersPerBar } = useContext(EditorContext);
   const firstNoteX = melody[0].position[0];
-  const insertPos = melody[melody.length - 1].position[0] + melody[melody.length - 1].duration;
+  const insertPos = melody[melody.length - 1].position[0] + melody[melody.length - 1].duration - firstNoteX;
   const onTryApply = (e: React.MouseEvent) => {
     if (!selected)
       return;
@@ -30,16 +30,16 @@ export default function MelodyOption({ melody, optionIndex, selected, onHover, o
   };
 
   return (
-    <div className={twMerge("relative box-border border-solid transition-all background-2", selected ? "border-4 rounded-lg border-cyan-400" : "border-2 rounded-md border-black")}>
-      <div className={twMerge("relative overflow-x-auto", )} style={{ maxWidth: maxWidthMeasures * GRID_SIZE_X * QUARTER_SUBDIVISIONS * quartersPerBar * scale }}>
-        <div className="relative w-fit h-full" style={{ width: insertPos * GRID_SIZE_X * scale, height: EDITOR_HEIGHT * scale + 16, minWidth: minWidthMeasures * GRID_SIZE_X * QUARTER_SUBDIVISIONS * quartersPerBar * scale }}>
+    <div className={twMerge("relative h-fit box-border border-solid hover:scale-[103%] transition-all duration-100 background-2", selected ? "border-4 rounded-lg border-cyan-400" : "border-2 rounded-md border-black")}>
+      <div className="overflow-x-auto" style={{ maxWidth: maxWidthMeasures * GRID_SIZE_X * QUARTER_SUBDIVISIONS * quartersPerBar * scale }}>
+        <div className="h-full" style={{ width: insertPos * GRID_SIZE_X * scale, height: EDITOR_HEIGHT * scale, minWidth: minWidthMeasures * GRID_SIZE_X * QUARTER_SUBDIVISIONS * quartersPerBar * scale }}>
           {
             melody.map(note => { return { position: [note.position[0] - firstNoteX, note.position[1]], duration: note.duration } }).map((note: NoteInfo, i) => (
               <Note key={i} info={note} lastNote={i === melody.length - 1} updateNote={() => { }} draggable={false} scale={scale} optionIndex={optionIndex} />
             ))
           }
         </div>
-        <div className="absolute w-full h-full hover:bg-[rgba(0,0,0,.1)] left-0 top-0 opacity-0 hover:opacity-100 transition-opacity duration-50 flex flex-col justify-center items-center" onMouseEnter={onHover} onMouseLeave={onHoverEnd} onMouseDown={onSelect}>
+        <div className="absolute w-full h-full hover:bg-[rgba(0,0,0,.2)] left-0 top-0 opacity-0 hover:opacity-100 transition-opacity duration-50 flex flex-col justify-center items-center" onMouseEnter={onHover} onMouseLeave={onHoverEnd} onMouseDown={onSelect}>
           <button className={twMerge("rounded-full bg-blue-600 border-1 border-solid border-blue-700 text-white px-2.5 py-1.5 transition-opacity text-sm", selected ? "opacity-100" : "opacity-0")} onMouseDown={onTryApply}>Apply</button>
         </div>
       </div>

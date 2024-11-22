@@ -22,7 +22,7 @@ model = tf.keras.models.Sequential([
     tf.keras.layers.Dense(len(encodings), activation='softmax')
 ])
 
-model.load_weights("checkpoints/model_full_v1.h5")
+model.load_weights("checkpoints/model_full_v2.h5")
 model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 
 #initialize the model
