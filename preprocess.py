@@ -8,19 +8,20 @@ from fractions import Fraction
 import time
 import traceback
 import warnings
+import threading
 
 import music21.midi.translate
 
-#from cleanUpMelody import *
-
 # load files from all given folders
-read_all_files = True
+read_all_files = False
 include_triplets = True
 folders_to_load = ["Mono-Melodies-All/Flute","Mono-Melodies-All/Clarinet","Mono-Melodies-All/Choir Aahs", "Mono-Melodies-All/Alto Sax", "Mono-Melodies-All/Acoustic Guitar", "Mono-Melodies-All/Acoustic Grand Piano"] if read_all_files else ["Mono-Melodies-All/Flute"]
+key_skip_threshold = .8
+num_threads = 16
 
 files = []
 
-file_limit = -1 if read_all_files else 5
+file_limit = -1 if read_all_files else 10
 file_count = 0
 note_count = 0
 display_output = False
@@ -56,11 +57,11 @@ warnings.filterwarnings("ignore", category=music21.midi.translate.TranslateWarni
 
 # isolate the flute part
 # or any single melody
-melodyData: list[list[(int, float)]] = []
+combinedMelodyData: list[list[(int, float)]] = []
 
 
-def cleanUpMelody():
-    global notes, note_count
+def cleanUpMelody(melodyData, notes: list[music21.note.Note | music21.note.Rest], time_signature):
+    # global notes, note_count
 
     
     # Do not try to add a melody if there are no notes
@@ -123,9 +124,11 @@ def cleanUpMelody():
         else:
             my_stream.append(music21.note.Note(midi=note[0], quarterLength=float(note[1])))
     
-    analysis = music21.analysis.discrete.BellmanBudge()
+    analysis = music21.analysis.discrete.AardenEssen()
     key_signature: music21.key.Key = analysis.getSolution(my_stream)
-    # print("Melody key:", key_signature, key_signature.correlationCoefficient)
+    if key_signature.correlationCoefficient < key_skip_threshold:
+        return
+    print("Melody key:", key_signature, key_signature.correlationCoefficient, "Melody length:", len(melody))
 
     root = key_signature.tonic.midi % 12
     # offset is largest root that is <= min_pitch
@@ -147,7 +150,7 @@ def cleanUpMelody():
 
     melody = part
 
-    if timeSigFound == True:
+    if time_signature is not None:
 
         # PREPEND-------------------- time signature and key signature to melody
         key_sig = key_signature.name[(len(key_signature.name)) - 5:]
@@ -156,95 +159,105 @@ def cleanUpMelody():
     else:
         return
         
-    note_count += len(melody)
+    # note_count += len(melody)
     melodyData.append(melody)
     if display_output:
         print("Added melody of", len(melody), "notes from", part.partName)
-    notes = []
+    notes.clear()
 
+def readFiles(files, result, thread_index):
+    melodyData: list[list[(int, float)]] = []
+# for file_index in range(file_count):
+    for file in files:
+        try:
+            stream = music21.instrument.partitionByInstrument(music21.converter.parse(file, format="midi"))
+            # streams.append(stream)
+            print("Read file", file)
+            # if display_file_output:
+                # progress = (file_index + 1) / file_count * 100
+                # progress_int = int(round(progress / (100 / PROGRESS_CHARACTERS)))
+                # last_slash = file.rfind("/")
+                # elapsed_seconds = time.time() - startTime
+                # est_seconds = (file_count - file_index) / (file_index + 1) * (time.time() - startTime)
+                # print(f'\33[2K[{"#" * progress_int}{"-" * (PROGRESS_CHARACTERS - progress_int)}] {progress:.1f}% - {file[:last_slash] + "/" + file[last_slash + 1:last_slash+7] + "..."} ({len(melodyData)} melodies, {note_count} notes) - Running for {int(elapsed_seconds / 60):d}:{int(elapsed_seconds % 60):02d}, est {int(est_seconds / 60):d}:{int(est_seconds % 60):02d}', end="\r")
+                #print(f"\33[2K[{"#" * progress_int}{"-" * (PROGRESS_CHARACTERS - progress_int)}] {progress:.1f}% - {file[:last_slash] + "/" + file[last_slash + 1:last_slash+7] + "..."} ({len(melodyData)} melodies, {note_count} notes)", end="\r")
 
-for file_index in range(file_count):
-    file = files[file_index]
-    if display_file_output:
-        progress = (file_index + 1) / file_count * 100
-        progress_int = int(round(progress / (100 / PROGRESS_CHARACTERS)))
-        last_slash = file.rfind("/")
-        elapsed_seconds = time.time() - startTime
-        est_seconds = (file_count - file_index) / (file_index + 1) * (time.time() - startTime)
-        print(f'\33[2K[{"#" * progress_int}{"-" * (PROGRESS_CHARACTERS - progress_int)}] {progress:.1f}% - {file[:last_slash] + "/" + file[last_slash + 1:last_slash+7] + "..."} ({len(melodyData)} melodies, {note_count} notes) - Running for {int(elapsed_seconds / 60):d}:{int(elapsed_seconds % 60):02d}, est {int(est_seconds / 60):d}:{int(est_seconds % 60):02d}', end="\r")
-        #print(f"\33[2K[{"#" * progress_int}{"-" * (PROGRESS_CHARACTERS - progress_int)}] {progress:.1f}% - {file[:last_slash] + "/" + file[last_slash + 1:last_slash+7] + "..."} ({len(melodyData)} melodies, {note_count} notes)", end="\r")
-    try:
-        stream = music21.instrument.partitionByInstrument(music21.converter.parse(file, format="midi"))
-        # print("Stream key:", stream.analyze("key"), stream.analyze("key").correlationCoefficient)
+            for part in stream.parts:
+                if part.partName is not None:
+                    # instr = part.getElementsByClass("Instrument")
+                    # print (instr[0].midiProgram)
 
-        timeSigFound = False
-        timeSig = ""
+                    notes: list[music21.note.Note | music21.note.Rest] = []
+                    shouldSkip = False
 
-        for part in stream.parts:
-            if part.partName is not None:
-                notes: list[music21.note.Note | music21.note.Rest] = []
-                shouldSkip = False
+                    # TIME SIGNATURE CHECK
+                    time_signature_it: music21.stream.iterator.RecursiveIterator = part[music21.meter.TimeSignature]
+                    if len(time_signature_it) == 0:
+                        continue
+                    time_signature = time_signature_it[0]
+                    if not time_signature.ratioString in valid_times:
+                        #print(f"Skipping {file} due to invalid time signature {time_signature.ratioString}")
+                        continue
 
-                # TIME SIGNATURE CHECK
-                time_signature_it: music21.stream.iterator.RecursiveIterator = part[music21.meter.TimeSignature]
-                if len(time_signature_it) == 0:
-                    continue
-                time_signature = time_signature_it[0]
-                if not time_signature.ratioString in valid_times:
-                    #print(f"Skipping {file} due to invalid time signature {time_signature.ratioString}")
-                    continue
+                    note: music21.note.Note | music21.note.Rest
+                    for note in part.notesAndRests:
+                        # remove melodies that contain notes with odd fractions
+                        dur = (note.duration.quarterLength).as_integer_ratio()
 
-                timeSig = str(time_signature.ratioString)
-                timeSigFound = True
+                        if not(4 % dur[1] == 0):
+                            shouldSkip = True
+                            break
+                        
+                        # remove melodies that contain triplets or 0.67
+                        if ("Triplet" in note.fullName or str(note.duration.quarterLength) == "0.67"):
+                            print(note.fullName)
+                            shouldSkip = True
+                            break
 
-                note: music21.note.Note | music21.note.Rest
-                for note in part.notesAndRests:
-                    # remove melodies that contain notes with odd fractions
-                    dur = (note.duration.quarterLength).as_integer_ratio()
-                    duration = note.duration.quarterLength
-
-                    if not(4 % dur[1] == 0):
-                        shouldSkip = True
-                        break
-                    
-                    # remove melodies that contain triplets or 0.67
-                    if ("Triplet" in note.fullName or str(note.duration.quarterLength) == "0.67"):
-                        print(note.fullName)
-                        shouldSkip = True
-                        break
-
-                    
-                    # record rests as '0'
-                    if isinstance(note, music21.note.Rest):
-                        # Try splitting the melody if whole rest
-                        if abs(note.duration.quarterLength - 4.0) < TOLERANCE:
-                            cleanUpMelody()
-                        else:
+                        
+                        # record rests as '0'
+                        if isinstance(note, music21.note.Rest):
+                            # Try splitting the melody if whole rest
+                            if abs(note.duration.quarterLength - 4.0) < TOLERANCE:
+                                cleanUpMelody(melodyData, notes, time_signature)
+                            else:
+                                notes.append(note)
+                        elif isinstance(note, music21.note.Note):
                             notes.append(note)
-                    elif isinstance(note, music21.note.Note):
-                        notes.append(note)
-                    else:
-                        # if a chord is found, skip the entire part
-                        shouldSkip = True
-                        break
-             
-                if not shouldSkip:
-                    cleanUpMelody()
-        
-    except music21.midi.MidiException as e:
-        print(f"Error reading {file}: {e}\n")
-    except Exception as e:
-        if display_file_output:
-            traceback.print_exc()
+                        else:
+                            # if a chord is found, skip the entire part
+                            shouldSkip = True
+                            break
+                
+                    if not shouldSkip:
+                        cleanUpMelody(melodyData, notes, time_signature)
+                
+            print("Done with", file)
+        except music21.midi.MidiException as e:
+            print(f"Error reading {file}: {e}\n")
+        except Exception as e:
+            if display_file_output:
+                traceback.print_exc()
+    result[thread_index] = melodyData
 
+threads = []
+result = [None] * num_threads
+for i in range(num_threads):
+    start = i * len(files) // num_threads
+    end = (i + 1) * len(files) // num_threads
+    streams = []
+    thread = threading.Thread(target=readFiles, args=(files[start:end], result, i))
+    threads.append(thread)
+    thread.start()
 
-i = 0
+for thread in threads:
+    thread.join()
 
-    
+combinedMelodyData = [melody for thread in result for melody in thread if melody is not None]
 
 # output the note data to a file
 with open("out/melodyData.txt", "w") as file:
-    file.write(str(melodyData))
+    file.write(str(combinedMelodyData))
 
 
 with open("out/keys.txt", "w") as file:

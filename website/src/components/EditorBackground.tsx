@@ -118,7 +118,7 @@ export function EditorBackground({ musicKey: key, octave, notes, generatedMelodi
                     editorRef={internalEditorRef}
                     draggable={false}
                     optionIndex={melodyIndex + 1}
-                    saturated={melodyIndex === selectedMelody}
+                    saturated={melodyIndex === selectedMelody || selectedMelody === -1 && melodyIndex === hoveredMelody}
                     hide={selectedMelody >= 0 && melodyIndex !== selectedMelody && melodyIndex !== hoveredMelody}
                   />))
                 }

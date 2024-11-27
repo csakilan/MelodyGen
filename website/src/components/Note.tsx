@@ -81,7 +81,7 @@ export default function Note({ info: { position, duration }, lastNote, updateNot
     return (
         <Draggable handle=".note-bg" defaultClassName="absolute" nodeRef={nodeRef} axis="y" bounds="parent" grid={[GRID_X * scale, GRID_SIZE_Y * scale]} position={{ x: notePosition[0] * scale, y: notePosition[1] * scale }} onStart={onStart} onDrag={onDrag} onStop={onStop} disabled={!draggable}>
             <div ref={nodeRef} className={twMerge("box-border flex flex-row transition-opacity duration-50", draggable ? resizing ? "cursor-ew-resize" : "cursor-move" : "")} style={{ width: GRID_X * durationGridded * scale, height: GRID_SIZE_Y * scale, opacity: hide ? 0 : 1 }}>
-                <div className={twMerge("note-bg w-full h-full border-solid box-border transition-colors duration-100", pitch === 0 ? "border-white" : "border-black")} style={{ borderWidth: Math.floor(scale), backgroundColor: pitch === 0 ? (saturated ? "black" : "#444") : color }}></div>
+                <div className={twMerge("note-bg w-full h-full border-solid box-border transition-colors", pitch === 0 ? "border-white" : "border-black")} style={{ borderWidth: Math.floor(scale), backgroundColor: pitch === 0 ? (saturated ? "black" : "#444") : color }}></div>
                 <div className="relative h-full w-0">
                     {
                         lastNote &&
